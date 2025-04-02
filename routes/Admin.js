@@ -62,11 +62,20 @@ const {
   getLessons,
   deleteLesson,
 } = require('../controllers/Admin/Lesson');
+const {
+  getStudents,
+  blockStudent,
+  checkBlockedStatus,
+} = require('../controllers/Admin/Student');
 
 router.post('/uploadVideo', BunnyVideoUploader, uploadVideo);
 router.post('/uploadImage', BunnyImageUploader, uploadImage);
 router.post('/admin', multerGlobal, createAdmin);
 router.post('/login', multerGlobal, login);
+
+router.get('/students', multerGlobal, isAuth, getStudents);
+router.put('/toggleBlock/:id', multerGlobal, isAuth, blockStudent);
+router.get('/checkBlock/:id', multerGlobal, isAuth, checkBlockedStatus);
 
 router.post('/material', multerGlobal, isAuth, createMaterial);
 router.delete('/material/:id', multerGlobal, isAuth, deleteMaterial);

@@ -314,7 +314,12 @@ exports.login = [
           .status(401)
           .json({ message: 'بيانات تسجيل الدخول غير صالحة!' });
       }
-
+      // Check if the student is blocked
+      if (loadedStudent.isBlocked) {
+        return res
+          .status(403)
+          .json({ message: 'تم حظر حسابك من قبل الإدارة!' });
+      }
       const isEqual = await bcrypt.compare(password, loadedStudent.password);
       if (!isEqual) {
         return res
