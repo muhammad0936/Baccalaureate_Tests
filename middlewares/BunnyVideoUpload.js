@@ -1,6 +1,6 @@
 const multer = require('multer');
 
-// Define allowed video file types
+// Define allowed video and audio file types
 const allowedMimeTypes = [
   'video/mp4',
   'video/x-m4v',
@@ -33,16 +33,19 @@ const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    // Check the file's MIME type
+    // Check if the file's MIME type is allowed
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true); // Accept the file
     } else {
-      cb(new Error('Only video files are allowed!'), false); // Reject the file
+      cb(new Error('Only video and audio files are allowed!'), false); // Reject the file
     }
   },
   limits: {
     fileSize: 50 * 1024 * 1024, // Optional: Limit file size to 50MB
   },
 });
-const BunnyVideoUploader = upload.single('video');
+
+// Accept any file regardless of the key name
+const BunnyVideoUploader = upload.any();
+
 module.exports = BunnyVideoUploader;

@@ -22,7 +22,7 @@ const path = require('path');
 
 exports.uploadVideo = async (req, res) => {
   try {
-    const file = req.file;
+    const file = req.files[0];
     if (!file) {
       return res.status(400).json({ error: 'Video file is missing.' });
     }
