@@ -40,7 +40,7 @@ const {
   getQuestionGroups,
   deleteQuestionGroup,
 } = require('../controllers/Admin/Question');
-const { uploadVideo } = require('../controllers/Admin/UploadVideo');
+const { uploadVideo, addVideo } = require('../controllers/Admin/UploadVideo');
 const BunnyVideoUploader = require('../middlewares/BunnyVideoUpload');
 const { uploadImage } = require('../controllers/Admin/UploadImage');
 const BunnyImageUploader = require('../middlewares/BunnyImageUpload');
@@ -67,8 +67,9 @@ const {
   blockStudent,
   checkBlockedStatus,
 } = require('../controllers/Admin/Student');
+const { getUserNotifications } = require('../controllers/Student/Notification');
 
-router.post('/uploadVideo', BunnyVideoUploader, uploadVideo);
+router.post('/addVideo', addVideo);
 router.post('/uploadImage', BunnyImageUploader, uploadImage);
 router.post('/admin', multerGlobal, createAdmin);
 router.post('/login', multerGlobal, login);
@@ -117,5 +118,7 @@ router.post('/sendNotification', isAuth, sendNotificationToAllStudents);
 
 router.post('/sellCenter', isAuth, createSellCenter);
 router.delete('/sellCenter/:id', isAuth, deleteSellCenter);
+
+router.get('/notifications', isAuth, getUserNotifications);
 
 module.exports = router;

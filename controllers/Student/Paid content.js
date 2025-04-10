@@ -76,12 +76,12 @@ exports.getAccessibleQuestions = async (req, res) => {
     const materialId = new mongoose.Types.ObjectId(material);
 
     // Verify material exists
-    const materialExists = await Material.exists({ _id: materialId });
-    if (!materialExists) {
-      return res
-        .status(404)
-        .json({ message: 'عذراً، لم يتم العثور على المادة.' });
-    }
+    // const materialExists = await Material.exists({ _id: materialId });
+    // if (!materialExists) {
+    //   return res
+    //     .status(404)
+    //     .json({ message: 'عذراً، لم يتم العثور على المادة.' });
+    // }
 
     // Get student with redeemed codes
     const student = await Student.findById(studentId).select('redeemedCodes');

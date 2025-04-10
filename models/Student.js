@@ -8,7 +8,7 @@ const studentSchema = new Schema(
     lname: { type: String },
     email: { type: String, unique: true, sparse: true },
     password: { type: String, required: true },
-    phone: { type: String, unique: true, required: true },
+    phone: { type: String, unique: true },
     image: {
       filename: String,
       accessUrl: String,

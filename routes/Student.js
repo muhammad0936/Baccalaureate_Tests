@@ -13,8 +13,6 @@ const { redeemCode, getCodesInfo } = require('../controllers/Student/Code');
 const { getFreeQuestions } = require('../controllers/Student/FreeQuestion');
 const {
   getAccessibleMaterials,
-  getUniversitiesWithAccessibleMaterials,
-  getAccessibleCollegesByUniversity,
   getAccessibleQuestions,
   getAccessibleCoursesByMaterial,
   getAccessibleVideosByCourse,

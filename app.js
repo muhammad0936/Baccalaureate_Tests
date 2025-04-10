@@ -17,7 +17,10 @@ const adminRouter = require('./routes/Admin');
 const studentRouter = require('./routes/Student');
 
 const connectToDatabase = require('./database/connection');
-
+app.use(express.json());
+app.use(
+  express.raw({ type: 'application/offset+octet-stream', limit: '50GB' })
+);
 app.use(bodyParser());
 app.use(cors());
 app.use(helmet());

@@ -10,22 +10,12 @@ exports.getProfile = async (req, res, next) => {
       .select(
         '-password -resetToken -resetTokenExpiration -redeemedCodes -favorites -__v -updatedAt'
       )
-      .populate('university', 'name')
-      .populate('college', 'name numOfYears')
       .lean();
 
     if (!student) {
       return res.status(StatusCodes.NOT_FOUND).json({
         message: 'لم يتم العثور على الطالب.',
       });
-    }
-    if (
-      student.university.name === 'بكالوريا' ||
-      student.college.name === 'بكالوريا'
-    ) {
-      delete student.university;
-      delete student.college;
-      delete student.year;
     }
     res.status(StatusCodes.OK).json({
       message: 'تم جلب بيانات الملف الشخصي بنجاح.',
@@ -62,19 +52,6 @@ const validateUpdateProfile = [
     .trim()
     .isString()
     .withMessage('رقم الهاتف يجب أن يكون نصاً.'),
-
-  body('university')
-    .optional()
-    .isMongoId()
-    .withMessage('معرف الجامعة غير صالح.'),
-
-  body('college').optional().isMongoId().withMessage('معرف الكلية غير صالح.'),
-
-  body('year')
-    .optional()
-    .isInt({ min: 0, max: 6 })
-    .withMessage('يجب أن تكون السنة الأكاديمية بين 0 و 6.'),
-
   body('image.filename')
     .optional()
     .isString()
@@ -104,17 +81,7 @@ exports.updateProfile = [
 
       const updates = req.body;
 
-      const student = await Student.findById(req.userId)
-        .populate('university', 'name')
-        .populate('college', 'name numOfYears');
-      if (
-        student.university.name === 'بكالوريا' ||
-        student.college.name === 'بكالوريا'
-      ) {
-        delete updates.university;
-        delete updates.college;
-        delete updates.year;
-      }
+      const student = await Student.findById(req.userId);
       console.log(updates);
 
       if (!student) {
@@ -145,38 +112,13 @@ exports.updateProfile = [
         student.phone = updates.phone;
       }
 
-      // Handle university/college relationship
-      if (updates.university || updates.college || updates.year) {
-        const universityId = updates.university || student.university;
-        const collegeId = updates.college || student.college;
-
-        const college = await College.findOne({
-          _id: collegeId,
-          university: universityId,
-        });
-
-        if (!college) {
-          return res.status(StatusCodes.BAD_REQUEST).json({
-            message: 'الكلية المحددة لا تنتمي إلى الجامعة المحددة!',
-          });
-        }
-        if (updates.year < 1 || updates.year > college.numOfYears) {
-          return res.status(StatusCodes.BAD_REQUEST).json({
-            message: `السنة الدراسية المحددة (${updates.year}) غير متاحة في هذه الكلية (الحد الأقصى ${college.numOfYears}).`,
-          });
-        }
-
-        student.university = universityId;
-        student.college = collegeId;
-      }
-
       // Update password if provided
       if (updates.password) {
         student.password = await bcrypt.hash(updates.password, 12);
       }
 
       // Update other fields
-      const allowedUpdates = ['fname', 'lname', 'year', 'image'];
+      const allowedUpdates = ['fname', 'lname', 'image'];
       allowedUpdates.forEach((field) => {
         if (updates[field] !== undefined) {
           student[field] = updates[field];
@@ -190,8 +132,6 @@ exports.updateProfile = [
         .select(
           '-password -resetToken -resetTokenExpiration -redeemedCodes -favorites -__v -updatedAt'
         )
-        .populate('university', 'name')
-        .populate('college', 'name numOfYears')
         .lean();
 
       res.status(StatusCodes.OK).json({

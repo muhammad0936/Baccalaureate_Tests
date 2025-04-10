@@ -12,14 +12,14 @@ const videoSchema = new Schema(
       accessUrl: String,
       videoId: String,
       libraryId: String,
-      donwnloadUrl: String,
+      downloadUrl: String,
     },
-    video480: {
-      accessUrl: String,
-      videoId: String,
-      libraryId: String,
-      donwnloadUrl: String,
-    },
+    seekPoints: [
+      {
+        moment: String,
+        description: String,
+      },
+    ],
     course: {
       type: Schema.Types.ObjectId,
       ref: 'Course',

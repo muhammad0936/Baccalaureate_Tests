@@ -26,9 +26,26 @@ exports.redeemCode = [
 
       // 1. Find the code in CodesGroups
       const codesGroup = await CodesGroup.findOne(
-        { 'codes.value': code },
-        { 'codes.$': 1, expiration: 1, materials: 1, courses: 1 }
-      ).session(session);
+        { 'codes.value': code }, // Search condition
+        { 'codes.$': 1, expiration: 1, materials: 1, courses: 1 } // Projection
+      )
+        .populate({
+          path: 'materials',
+        })
+        .populate({
+          path: 'courses',
+          populate: [
+            {
+              path: 'material',
+              select: '_id', // Select only _id for material
+            },
+            {
+              path: 'teacher',
+              select: 'fname lname', // Select fname and lname for teacher
+            },
+          ],
+        })
+        .session(session);
 
       if (!codesGroup) {
         return res
@@ -118,6 +135,10 @@ exports.getCodesInfo = async (req, res) => {
         {
           path: 'courses',
           select: 'name',
+          populate: {
+            path: 'material',
+            select: '_id',
+          },
         },
       ],
     });

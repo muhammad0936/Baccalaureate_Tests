@@ -112,7 +112,7 @@ exports.createCodesGroup = [
 // Get Codes Groups
 exports.getCodesGroups = [
   query('page').optional().isInt({ min: 1 }).toInt(),
-  query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+  query('limit').optional().isInt({ min: 1 }).toInt(),
   query('name').optional().trim(),
   query('material').optional().isMongoId(),
   query('course').optional().isMongoId(),
