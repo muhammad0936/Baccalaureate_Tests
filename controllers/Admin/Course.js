@@ -5,6 +5,7 @@ const { body, param, validationResult } = require('express-validator');
 const Material = require('../../models/Material');
 const Teacher = require('../../models/Teacher');
 const { default: axios } = require('axios');
+const Video = require('../../models/Video');
 
 // Create a new course
 exports.createCourse = [
@@ -167,36 +168,89 @@ exports.deleteCourse = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
-      const course = await Course.findByIdAndDelete(req.params.id);
+
+      // Find course and associated videos first
+      const course = await Course.findById(req.params.id);
       if (!course) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على الدورة.' });
       }
-      try {
-        deletionResponse = await axios.delete(course.promoVideo720.accessUrl, {
-          headers: {
-            Accept: 'application/json',
-            AccessKey: process.env.BUNNY_API_KEY,
-          },
+
+      const videos = await Video.find({ course: course._id });
+
+      // Collect all Bunny video information before deletion
+      const bunnyDeletions = [];
+
+      // Add promo video if exists
+      if (course.promoVideo720?.videoId) {
+        bunnyDeletions.push({
+          type: 'promo',
+          videoId: course.promoVideo720.videoId,
+          libraryId: course.promoVideo720.libraryId,
         });
-      } catch (deleteError) {
-        if (deleteError.response && deleteError.response.status === 404) {
-          console.log('Video not found, skipping deletion.');
-        } else {
-          // Re-throw other errors
-          throw deleteError;
+      }
+
+      // Add course videos
+      videos.forEach((video) => {
+        if (video.video720?.videoId) {
+          bunnyDeletions.push({
+            type: 'course_video',
+            videoId: video.video720.videoId,
+            libraryId: video.video720.libraryId,
+          });
+        }
+      });
+
+      // Delete database entries first
+      await Video.deleteMany({ course: course._id });
+      await Course.findByIdAndDelete(req.params.id);
+
+      // Process Bunny deletions and track results
+      const deletionResults = [];
+      for (const video of bunnyDeletions) {
+        try {
+          const response = await axios.delete(
+            `https://video.bunnycdn.com/library/${video.libraryId}/videos/${video.videoId}`,
+            {
+              headers: {
+                Accept: 'application/json',
+                AccessKey: process.env.BUNNY_API_KEY,
+              },
+            }
+          );
+
+          deletionResults.push({
+            type: video.type,
+            videoId: video.videoId,
+            status: 'success',
+            data: response.data,
+          });
+        } catch (error) {
+          deletionResults.push({
+            type: video.type,
+            videoId: video.videoId,
+            status: 'error',
+            error: error.response?.data || error.message,
+          });
         }
       }
 
-      // }
-      // console.log(deletionResponse?.data);
-      res.status(200).json({ message: 'تم حذف الدورة بنجاح.' });
+      res.status(200).json({
+        message: 'تم حذف الدورة ومحتوياتها بنجاح.',
+        details: {
+          databaseDeleted: true,
+          bunnyDeletions: deletionResults,
+        },
+      });
     } catch (err) {
-      // console.error(err);
-      res
-        .status(err.statusCode || 500)
-        .json({ error: err.message || 'حدث خطأ أثناء معالجة الطلب.' });
+      res.status(err.statusCode || 500).json({
+        error: err.message || 'حدث خطأ أثناء معالجة الطلب.',
+        details: {
+          databaseDeleted: false,
+          bunnyDeletions: [],
+        },
+      });
     }
   },
 ];

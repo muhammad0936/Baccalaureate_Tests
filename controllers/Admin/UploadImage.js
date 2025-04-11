@@ -21,7 +21,7 @@ exports.uploadImage = async (req, res) => {
       return res.status(400).json({ error: 'Image file is missing.' });
     }
 
-    const filename = file.originalname;
+    const filename = Date.now().toString() + '_' + file.originalname;
     const uploadUrl = `https://${HOSTNAME}/${STORAGE_ZONE_NAME}/${filename}`;
 
     // Upload the file to Bunny Storage

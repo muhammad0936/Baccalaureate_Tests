@@ -115,32 +115,70 @@ exports.deleteVideo = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
-      const video = await Video.findByIdAndDelete(req.params.id);
+
+      // Find video first to get video details
+      const video = await Video.findById(req.params.id);
       if (!video) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على الفيديو.' });
       }
-      try {
-        deletionResponse = await axios.delete(video.video720.accessUrl, {
-          headers: {
-            Accept: 'application/json',
-            AccessKey: process.env.BUNNY_API_KEY,
-          },
+
+      // Prepare Bunny deletion information
+      const bunnyDeletions = [];
+      if (video.video720?.videoId) {
+        bunnyDeletions.push({
+          videoId: video.video720.videoId,
+          libraryId: video.video720.libraryId,
         });
-      } catch (deleteError) {
-        if (deleteError.response && deleteError.response.status === 404) {
-          console.log('Video not found, skipping deletion.');
-        } else {
-          // Re-throw other errors
-          throw deleteError;
+      }
+
+      // Delete from database first
+      await Video.deleteOne({ _id: video._id });
+
+      // Process Bunny deletions
+      const deletionResults = [];
+      for (const bunnyVideo of bunnyDeletions) {
+        try {
+          const response = await axios.delete(
+            `https://video.bunnycdn.com/library/${bunnyVideo.libraryId}/videos/${bunnyVideo.videoId}`,
+            {
+              headers: {
+                Accept: 'application/json',
+                AccessKey: process.env.BUNNY_API_KEY,
+              },
+            }
+          );
+
+          deletionResults.push({
+            videoId: bunnyVideo.videoId,
+            status: 'success',
+            data: response.data,
+          });
+        } catch (error) {
+          deletionResults.push({
+            videoId: bunnyVideo.videoId,
+            status: 'error',
+            error: error.response?.data || error.message,
+          });
         }
       }
-      res.status(200).json({ message: 'تم حذف الفيديو بنجاح.' });
+
+      res.status(200).json({
+        message: 'تم حذف الفيديو بنجاح.',
+        details: {
+          databaseDeleted: true,
+          bunnyDeletions: deletionResults,
+        },
+      });
     } catch (err) {
-      res
-        .status(err.statusCode || 500)
-        .json({ error: err.message || 'حدث خطأ في الخادم.' });
+      res.status(err.statusCode || 500).json({
+        error: err.message || 'حدث خطأ في الخادم.',
+        details: {
+          databaseDeleted: false,
+          bunnyDeletions: [],
+        },
+      });
     }
   },
 ];

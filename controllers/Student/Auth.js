@@ -10,6 +10,7 @@ const nodemailer = require('nodemailer');
 
 // controllers/auth.js
 const Otp = require('../../models/Otp');
+const { default: axios } = require('axios');
 
 exports.sendOtp = async (req, res) => {
   const { email } = req.body;
@@ -366,7 +367,6 @@ exports.deleteAccount = [
       const studentId = req.userId;
       const { password } = req.body;
 
-      // Find student with password
       const student = await Student.findById(studentId)
         .select('+password')
         .lean();
@@ -375,21 +375,55 @@ exports.deleteAccount = [
         return res.status(404).json({ message: 'الطالب غير موجود!' });
       }
 
-      // Verify password
       const isMatch = await bcrypt.compare(password, student.password);
       if (!isMatch) {
         return res.status(401).json({ message: 'كلمة المرور غير صحيحة!' });
       }
 
-      // Delete student account
-      await Student.findByIdAndDelete(studentId);
+      const bunnyDeletions = [];
+      if (student.image?.accessUrl) {
+        bunnyDeletions.push({
+          type: 'profile_image',
+          accessUrl: student.image.accessUrl,
+        });
+      }
+
+      await Student.deleteOne({ _id: studentId });
+
+      const deletionResults = [];
+      for (const file of bunnyDeletions) {
+        try {
+          await axios.delete(file.accessUrl, {
+            headers: {
+              Accept: 'application/json',
+              AccessKey: process.env.BUNNY_STORAGE_API_KEY,
+            },
+          });
+          deletionResults.push({ type: file.type, status: 'success' });
+        } catch (error) {
+          deletionResults.push({
+            type: file.type,
+            status: 'error',
+            error: error.response?.data || error.message,
+          });
+        }
+      }
 
       res.status(StatusCodes.OK).json({
         message: 'تم حذف الحساب بنجاح.',
+        details: {
+          databaseDeleted: true,
+          bunnyDeletions: deletionResults,
+        },
       });
     } catch (err) {
-      if (!err.statusCode) err.statusCode = StatusCodes.INTERNAL_SERVER_ERROR;
-      next(err);
+      res.status(err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR).json({
+        error: err.message || 'حدث خطأ في الخادم.',
+        details: {
+          databaseDeleted: false,
+          bunnyDeletions: [],
+        },
+      });
     }
   },
 ];

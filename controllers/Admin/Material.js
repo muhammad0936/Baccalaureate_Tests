@@ -1,3 +1,4 @@
+const { default: axios } = require('axios');
 const Material = require('../../models/Material');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
@@ -59,17 +60,58 @@ exports.deleteMaterial = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
-      const material = await Material.findByIdAndDelete(req.params.id);
+
+      const material = await Material.findById(req.params.id);
       if (!material) {
         return res
           .status(404)
           .json({ error: 'عذراً، لم يتم العثور على المادة.' });
       }
-      res.status(200).json({ message: 'تم حذف المادة بنجاح.' });
+
+      const bunnyDeletions = [];
+      if (material.icon?.accessUrl) {
+        bunnyDeletions.push({
+          type: 'icon',
+          accessUrl: material.icon.accessUrl,
+        });
+      }
+
+      await Material.deleteOne({ _id: req.params.id });
+
+      const deletionResults = [];
+      for (const file of bunnyDeletions) {
+        try {
+          await axios.delete(file.accessUrl, {
+            headers: {
+              Accept: 'application/json',
+              AccessKey: process.env.BUNNY_STORAGE_API_KEY,
+            },
+          });
+          deletionResults.push({ type: file.type, status: 'success' });
+        } catch (error) {
+          deletionResults.push({
+            type: file.type,
+            status: 'error',
+            error: error.response?.data || error.message,
+          });
+        }
+      }
+
+      res.status(200).json({
+        message: 'تم حذف المادة بنجاح.',
+        details: {
+          databaseDeleted: true,
+          bunnyDeletions: deletionResults,
+        },
+      });
     } catch (err) {
-      res
-        .status(err.statusCode || 500)
-        .json({ error: err.message || 'حدث خطأ في الخادم.' });
+      res.status(500).json({
+        error: 'حدث خطأ في الخادم.',
+        details: {
+          databaseDeleted: false,
+          bunnyDeletions: [],
+        },
+      });
     }
   },
 ];

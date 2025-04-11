@@ -3,6 +3,7 @@ const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 const Lesson = require('../../models/Lesson');
 const { default: mongoose } = require('mongoose');
+const { default: axios } = require('axios');
 
 exports.createQuestionGroup = [
   body('paragraph')
@@ -158,8 +159,8 @@ exports.deleteQuestionGroup = [
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const questionId = req.params.id;
-      const group = await QuestionGroup.findById(questionId);
+      const questionGroupId = req.params.id;
+      const group = await QuestionGroup.findById(questionGroupId);
 
       if (!group) {
         return res
@@ -167,18 +168,53 @@ exports.deleteQuestionGroup = [
           .json({ error: 'عذراً، لم يتم العثور على السؤال.' });
       }
 
-      // Remove the question from the array
-      group.questions.pull(questionId);
-      await group.save();
-
-      // Delete the group if empty
-      if (group.questions.length === 0) {
-        await QuestionGroup.findByIdAndDelete(group._id);
+      // Capture file info before any deletion
+      const bunnyDeletions = [];
+      if (group.image?.accessUrl) {
+        bunnyDeletions.push({
+          type: 'question_image',
+          accessUrl: group.image.accessUrl,
+        });
       }
 
-      res.status(200).json({ message: 'تم حذف السؤال بنجاح.' });
+      // Delete the entire question group
+      await QuestionGroup.deleteOne({ _id: questionGroupId });
+
+      // Process file deletions
+      const deletionResults = [];
+      for (const file of bunnyDeletions) {
+        try {
+          await axios.delete(file.accessUrl, {
+            headers: {
+              Accept: 'application/json',
+              AccessKey: process.env.BUNNY_STORAGE_API_KEY,
+            },
+          });
+          deletionResults.push({ type: file.type, status: 'success' });
+        } catch (error) {
+          deletionResults.push({
+            type: file.type,
+            status: 'error',
+            error: error.response?.data || error.message,
+          });
+        }
+      }
+
+      res.status(200).json({
+        message: 'تم حذف مجموعة الأسئلة بنجاح.',
+        details: {
+          databaseDeleted: true,
+          bunnyDeletions: deletionResults,
+        },
+      });
     } catch (err) {
-      res.status(500).json({ error: err.message || 'حدث خطأ في الخادم.' });
+      res.status(500).json({
+        error: err.message || 'حدث خطأ في الخادم.',
+        details: {
+          databaseDeleted: false,
+          bunnyDeletions: [],
+        },
+      });
     }
   },
 ];
