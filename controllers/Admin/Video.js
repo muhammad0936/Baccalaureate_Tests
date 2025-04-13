@@ -4,11 +4,13 @@ const Course = require('../../models/Course');
 const { ensureIsAdmin } = require('../../util/ensureIsAdmin');
 const { body, param, validationResult } = require('express-validator');
 const { default: axios } = require('axios');
+const Unit = require('../../models/Unit');
 
 // Create a new video
 exports.createVideo = [
   body('name').notEmpty().withMessage('اسم الفيديو مطلوب.'),
   body('course').isMongoId().withMessage('معرف الدورة غير صالح.'),
+  body('unit').isMongoId().withMessage('معرف الوحدة غير صالح.'),
   body('video720.accessUrl')
     .optional()
     .isString()
@@ -33,27 +35,43 @@ exports.createVideo = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
+
       // Verify if the associated course exists
-      const courseExists = await Course.exists({ _id: req.body.course });
+      const courseExists = await Course.findById(req.body.course);
       if (!courseExists) {
         return res
           .status(400)
           .json({ message: 'عذراً، لم يتم العثور على الدورة.' });
       }
+
+      // Verify if the associated unit exists
+      const unitExists = await Unit.findById(req.body.unit);
+      if (!unitExists) {
+        return res
+          .status(400)
+          .json({ message: 'عذراً، لم يتم العثور على الوحدة.' });
+      }
+
+      if (unitExists.material.toString() !== courseExists.material.toString()) {
+        return res
+          .status(400)
+          .json({ message: 'الدورة والوحدة لا ينتميان لنفس المادة' });
+      }
+
+      // Process video720 information
       if (req.body.video720) {
         const playDataUrl = `https://video.bunnycdn.com/library/${req.body.video720?.libraryId}/videos/${req.body.video720?.videoId}/play?expires=0`;
-        const videoPlayData = await axios.get(playDataUrl, {
-          // AccessKey: API_KEY,
-        });
+        const videoPlayData = await axios.get(playDataUrl);
         req.body.video720.downloadUrl = videoPlayData?.data?.fallbackUrl;
       }
+
       const video = new Video(req.body);
       await video.save();
 
-      // Destructure to send back an appropriate response
-      const { _id, name, video720, course, seekPoints } = video;
+      // Return selected fields in the response
+      const { _id, name, video720, course, unit, seekPoints } = video;
       res.status(201).json({
-        video: { _id, name, video720, course, seekPoints },
+        video: { _id, name, video720, course, unit, seekPoints },
       });
     } catch (err) {
       res
@@ -68,7 +86,7 @@ exports.getVideos = async (req, res) => {
   try {
     await ensureIsAdmin(req.userId);
     // Destructure pagination and filter parameters from the query string
-    const { page, limit, name, course } = req.query;
+    const { page, limit, name, course, unit } = req.query;
     const filter = {};
 
     // Filter based on video name using a case-insensitive regex
@@ -76,8 +94,9 @@ exports.getVideos = async (req, res) => {
       filter.name = { $regex: name, $options: 'i' };
     }
 
-    if (!course) {
-      return res.status(400).json({ message: 'معرف الدورة مطلوب.' });
+    // Both course and unit ids are required for filtering in this scenario
+    if (!course || !unit) {
+      return res.status(400).json({ message: 'معرف الدورة والوحدة مطلوبان.' });
     }
 
     // Verify if the provided course exists
@@ -87,14 +106,28 @@ exports.getVideos = async (req, res) => {
         .status(400)
         .json({ message: 'عذراً، لم يتم العثور على الدورة.' });
     }
+
+    // Verify if the provided unit exists
+    const unitExists = await Unit.exists({ _id: unit });
+    if (!unitExists) {
+      return res
+        .status(400)
+        .json({ message: 'عذراً، لم يتم العثور على الوحدة.' });
+    }
+
+    // Add filters for course and unit
     filter.course = new mongoose.Types.ObjectId(course);
+    filter.unit = new mongoose.Types.ObjectId(unit);
 
     // Paginate videos based on filter and pagination options
     const videos = await Video.paginate(filter, {
       page: parseInt(page, 10) || 1,
       limit: parseInt(limit, 10) || 10,
-      populate: { path: 'course', select: 'name description' },
-      select: 'name video course video720 seekPoints',
+      populate: [
+        { path: 'course', select: 'name description' },
+        { path: 'unit', select: 'name color' },
+      ],
+      select: 'name video course unit video720 seekPoints',
     });
 
     res.status(200).json(videos);

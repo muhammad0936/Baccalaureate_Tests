@@ -82,11 +82,9 @@ router.post('/material', multerGlobal, isAuth, createMaterial);
 router.delete('/material/:id', multerGlobal, isAuth, deleteMaterial);
 
 router.post('/unit', multerGlobal, isAuth, createUnit);
-router.get('/units', multerGlobal, isAuth, getUnits);
 router.delete('/unit/:id', multerGlobal, isAuth, deleteUnit);
 
 router.post('/lesson', multerGlobal, isAuth, createLesson);
-router.get('/lessons', multerGlobal, isAuth, getLessons);
 router.delete('/lesson/:id', multerGlobal, isAuth, deleteLesson);
 
 router.post('/questions', multerGlobal, isAuth, createQuestionGroup);

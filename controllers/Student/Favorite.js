@@ -18,9 +18,8 @@ exports.addFavoriteQuestionGroup = [
     .notEmpty()
     .withMessage('موقع السؤال مطلوب')
     .custom((value) => {
-      // Check if the value is a number and not a numeric string
       if (typeof value !== 'number') {
-        throw new Error('موقع السؤال يجب أن يكون رقما حقيقيا');
+        throw new Error('موقع السؤال يجب أن يكون رقما');
       }
       return true;
     }),
@@ -34,56 +33,83 @@ exports.addFavoriteQuestionGroup = [
       const studentId = req.userId;
       const { questionGroupId, index = 0 } = req.body;
 
-      // Verify that the question group exists
-      console.log(questionGroupId);
-      const questionGroup = await QuestionGroup.findById(questionGroupId);
-      console.log(questionGroup);
-      if (!questionGroup) {
+      // Verify question group existence with populated material path
+      const questionGroup = await QuestionGroup.findById(
+        questionGroupId
+      ).populate({
+        path: 'lesson',
+        select: 'unit',
+        populate: {
+          path: 'unit',
+          select: 'material',
+        },
+      });
+
+      if (!questionGroup?.lesson?.unit?.material) {
         return res.status(404).json({
-          message: 'عذراً، لم يتم العثور على مجموعة الأسئلة.',
+          message:
+            'عذراً، لم يتم العثور على مجموعة الأسئلة أو الدرس أو الوحدة.',
         });
       }
 
-      // Retrieve the student
+      const materialId = questionGroup.lesson.unit.material.toString();
+
+      // Retrieve student with access check
       const student = await Student.findById(studentId).populate(
         'redeemedCodes.codesGroup'
       );
-      if (!student) {
-        return res
-          .status(404)
-          .json({ message: 'عذراً، لم يتم العثور على الطالب.' });
-      }
-      const accessibleMaterials = student.redeemedCodes
-        .map((rc) => {
-          return rc.codesGroup.materials.map((m) => m?.toString());
-        })
-        .flat();
-      if (!accessibleMaterials.includes(questionGroup.material?.toString()))
-        return res
-          .status(400)
-          .json({ message: `ليس لك صلاحية الوصول إلى هذا السؤال` });
 
-      // Check if the question group is already in favorites
-      if (
-        student.favorites.some(
-          (fav) =>
-            fav.questionGroup?.toString() === questionGroupId &&
-            fav.index === index
-        )
-      ) {
+      if (!student) {
+        return res.status(404).json({
+          message: 'عذراً، لم يتم العثور على الطالب.',
+        });
+      }
+
+      // Check material access through redeemed codes
+      const hasAccess = student.redeemedCodes.some((redemption) => {
+        return redemption.codesGroup.materials.some(
+          (m) =>
+            m.toString() === materialId &&
+            redemption.codesGroup.expiration > new Date() &&
+            redemption.codesGroup.codes.some(
+              (c) => c.value === redemption.code && c.isUsed
+            )
+        );
+      });
+
+      if (!hasAccess) {
+        return res.status(403).json({
+          message: 'ليس لديك صلاحية الوصول إلى هذا السؤال.',
+        });
+      }
+
+      // Validate question index
+      if (index >= questionGroup.questions?.length) {
+        return res.status(400).json({
+          message: `موقع السؤال غير صالح، يجب أن يكون بين 0 و ${
+            questionGroup.questions?.length - 1
+          }`,
+        });
+      }
+
+      // Check for existing favorite
+      const exists = student.favorites.some(
+        (fav) =>
+          fav.questionGroup.equals(questionGroupId) && fav.index === index
+      );
+
+      if (exists) {
         return res.status(400).json({
           message: 'مجموعة الأسئلة مضافة للمفضلة من قبل.',
         });
       }
-      if (questionGroup?.questions?.length <= index) {
-        return res.status(400).json({
-          message: `موقع السؤال غير صالح, يجب أن يكون بين 0 و ${
-            questionGroup?.questions?.length - 1
-          }`,
-        });
-      }
-      // Add the question group to favorites and save
-      student.favorites.push({ questionGroup: questionGroupId, index });
+
+      // Add to favorites
+      student.favorites.push({
+        questionGroup: questionGroupId,
+        index,
+      });
+
       await student.save();
 
       res.status(200).json({
@@ -91,7 +117,7 @@ exports.addFavoriteQuestionGroup = [
       });
     } catch (err) {
       console.error('Error in addFavoriteQuestionGroup:', err);
-      res.status(err.statusCode || 500).json({
+      res.status(500).json({
         error: err.message || 'حدث خطأ في الخادم.',
       });
     }

@@ -90,17 +90,6 @@ exports.updateProfile = [
         });
       }
 
-      // Handle email uniqueness
-      if (updates.email && updates.email !== student.email) {
-        const emailExists = await Student.findOne({ email: updates.email });
-        if (emailExists) {
-          return res.status(StatusCodes.BAD_REQUEST).json({
-            message: 'البريد الإلكتروني موجود بالفعل!',
-          });
-        }
-        student.email = updates.email;
-      }
-
       // Handle phone uniqueness
       if (updates.phone && updates.phone !== student.phone) {
         const phoneExists = await Student.findOne({ phone: updates.phone });
@@ -110,11 +99,6 @@ exports.updateProfile = [
           });
         }
         student.phone = updates.phone;
-      }
-
-      // Update password if provided
-      if (updates.password) {
-        student.password = await bcrypt.hash(updates.password, 12);
       }
 
       // Update other fields

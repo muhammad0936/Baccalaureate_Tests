@@ -12,8 +12,8 @@ exports.getFreeQuestions = async (req, res) => {
     const validLesson = await Lesson.findById(lesson);
 
     if (!validLesson) {
-      return res.status(400).json({
-        message: 'المادة غير متوفرة في الموارد المجانية.',
+      return res.status(404).json({
+        message: 'لم يتم العثور على الدرس',
       });
     }
 

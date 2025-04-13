@@ -6,9 +6,11 @@ const Question = require('../../models/QuestionGroup');
 const Course = require('../../models/Course');
 const Video = require('../../models/Video');
 const QuestionGroup = require('../../models/QuestionGroup');
+const Lesson = require('../../models/Lesson');
 
 exports.getAccessibleMaterials = async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
     // Fetch student with redeemed codes
     const student = await Student.findById(req.userId).select('redeemedCodes');
     if (!student) {
@@ -58,33 +60,32 @@ exports.getAccessibleMaterials = async (req, res) => {
       .json({ error: err.message || 'حدث خطأ في الخادم.' });
   }
 };
-
 exports.getAccessibleQuestions = async (req, res) => {
   try {
-    const { limit = 10, page = 1, material } = req.query;
+    const { limit = 10, page = 1, lesson } = req.query;
     const studentId = req.userId;
 
-    // Validate input parameters
-    if (!material) {
-      return res.status(400).json({ message: 'معرف المادة مطلوب.' });
+    if (!lesson) {
+      return res.status(400).json({ message: 'معرف الدرس مطلوب.' });
     }
-    if (!mongoose.Types.ObjectId.isValid(material)) {
-      return res.status(400).json({ message: 'صيغة معرف المادة غير صالحة.' });
+    if (!mongoose.Types.ObjectId.isValid(lesson)) {
+      return res.status(400).json({ message: 'صيغة معرف الدرس غير صالحة.' });
     }
 
-    // Convert to ObjectId once
-    const materialId = new mongoose.Types.ObjectId(material);
+    const lessonId = new mongoose.Types.ObjectId(lesson);
+    const lessonDoc = await Lesson.findById(lessonId)
+      .select('unit')
+      .populate({ path: 'unit', select: 'material' });
 
-    // Verify material exists
-    // const materialExists = await Material.exists({ _id: materialId });
-    // if (!materialExists) {
-    //   return res
-    //     .status(404)
-    //     .json({ message: 'عذراً، لم يتم العثور على المادة.' });
-    // }
+    if (!lessonDoc?.unit?.material) {
+      return res.status(404).json({ message: 'الدرس غير موجود.' });
+    }
 
-    // Get student with redeemed codes
-    const student = await Student.findById(studentId).select('redeemedCodes');
+    const materialId = lessonDoc.unit.material;
+    const student = await Student.findById(studentId)
+      .select('redeemedCodes favorites')
+      .lean();
+
     if (!student) {
       return res
         .status(404)
@@ -93,63 +94,57 @@ exports.getAccessibleQuestions = async (req, res) => {
 
     const now = new Date();
     let hasAccess = false;
+    const redemptionQueries = student.redeemedCodes.map((redemption) => ({
+      _id: redemption.codesGroup,
+      expiration: { $gt: now },
+      'codes.value': redemption.code,
+      'codes.isUsed': true,
+      materials: materialId,
+    }));
 
-    // Check each redemption for valid access
-    for (const redemption of student.redeemedCodes) {
-      const codesGroup = await CodesGroup.findOne({
-        _id: redemption.codesGroup,
-        expiration: { $gt: now },
-        materials: materialId,
-        codes: {
-          $elemMatch: {
-            value: redemption.code,
-            isUsed: true,
-          },
-        },
-      })
-        .select('_id')
-        .lean();
-
-      if (codesGroup) {
-        hasAccess = true;
-        break;
-      }
+    if (redemptionQueries.length > 0) {
+      const codesGroup = await CodesGroup.findOne({ $or: redemptionQueries });
+      if (codesGroup) hasAccess = true;
     }
 
     if (!hasAccess) {
-      return res.status(403).json({
-        message: 'ليس لديك صلاحية الوصول لهذه المادة.',
-      });
+      return res
+        .status(403)
+        .json({ message: 'ليس لديك صلاحية الوصول لهذه المادة.' });
     }
 
-    // Implement pagination
     const pageSize = parseInt(limit, 10);
     const currentPage = parseInt(page, 10);
-
-    // Get total number of questions for pagination metadata
-    const totalQuestions = await Question.countDocuments({
-      material: materialId,
-    });
-
-    // Retrieve questions with pagination
-    const questions = await Question.find({ material: materialId })
+    const questionGroups = await QuestionGroup.find({ lesson: lessonId })
       .skip((currentPage - 1) * pageSize)
       .limit(pageSize)
-      .select('-__v -createdAt -updatedAt') // Exclude unnecessary fields
-      .populate('material', 'name'); // Populate material details
+      .lean();
+
+    const favoriteMap = new Map();
+    student.favorites.forEach((fav) => {
+      favoriteMap.set(`${fav.questionGroup}_${fav.index}`, true);
+    });
+
+    const enhanced = questionGroups.map((group) => ({
+      ...group,
+      questions: group.questions?.map((q, i) => ({
+        ...q,
+        isFavorite: favoriteMap.has(`${group._id}_${i}`),
+      })),
+    }));
+
+    const total = await QuestionGroup.countDocuments({ lesson: lessonId });
 
     res.status(200).json({
-      docs: questions,
-      totalDocs: totalQuestions,
+      docs: enhanced,
+      totalDocs: total,
       limit: pageSize,
       page: currentPage,
-      totalPages: Math.ceil(totalQuestions / pageSize),
+      totalPages: Math.ceil(total / pageSize),
     });
   } catch (err) {
-    console.error('Error in getAccessibleQuestions:', err);
-    res.status(err.statusCode || 500).json({
-      error: err.message || 'حدث خطأ في الخادم.',
-    });
+    console.error(err.message);
+    res.status(500).json({ error: 'حدث خطأ في الخادم.' });
   }
 };
 
@@ -340,15 +335,15 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
     if (!questionGroupId || !questionIndex) {
       return res
         .status(400)
-        .json({ message: 'معرف المجموعة وفهرس السؤال مطلوبان.' }); // "Question group ID and question index are required."
+        .json({ message: 'معرف المجموعة وفهرس السؤال مطلوبان.' });
     }
     if (!mongoose.Types.ObjectId.isValid(questionGroupId)) {
-      return res.status(400).json({ message: 'صيغة معرف المجموعة غير صالحة.' }); // "Invalid question group ID format."
+      return res.status(400).json({ message: 'صيغة معرف المجموعة غير صالحة.' });
     }
     if (isNaN(questionIndex) || questionIndex < 0) {
       return res
         .status(400)
-        .json({ message: 'فهرس السؤال يجب أن يكون عدداً صحيحاً غير سالب.' }); // "Question index must be a non-negative integer."
+        .json({ message: 'فهرس السؤال يجب أن يكون عدداً صحيحاً غير سالب.' });
     }
 
     // Find the student
@@ -356,66 +351,72 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
     if (!student) {
       return res
         .status(404)
-        .json({ message: 'عذراً، لم يتم العثور على الطالب.' }); // "Student not found."
+        .json({ message: 'عذراً، لم يتم العثور على الطالب.' });
     }
-    // Retrieve the question group
+
+    // Retrieve the question group with populated lesson and unit
     const questionGroup = await QuestionGroup.findById(questionGroupId)
-      .select('questions name description material') // Fetch only relevant fields
+      .populate({
+        path: 'lesson',
+        select: 'unit',
+        populate: {
+          path: 'unit',
+          select: 'material',
+        },
+      })
+      .select('questions name description lesson')
       .lean();
 
     if (!questionGroup) {
-      return res.status(404).json({ message: 'لم يتم العثور على المجموعة.' }); // "Question group not found."
+      return res.status(404).json({ message: 'لم يتم العثور على المجموعة.' });
     }
 
-    // Check if the question index is within bounds
-    if (questionIndex >= questionGroup.questions.length) {
-      return res.status(400).json({ message: 'فهرس السؤال خارج النطاق.' }); // "Question index out of range."
+    // Validate lesson and unit existence
+    if (!questionGroup.lesson?.unit?.material) {
+      return res.status(404).json({ message: 'الدرس أو الوحدة غير موجودة.' });
     }
+
+    const materialId = questionGroup.lesson.unit.material;
     const now = new Date();
     let hasAccess = false;
 
-    // Check access rights for the specified question group
-    for (const redemption of student.redeemedCodes) {
-      const codesGroup = await CodesGroup.findOne({
-        _id: redemption.codesGroup,
-        expiration: { $gt: now },
-        materials: questionGroup.material,
-        codes: {
-          $elemMatch: {
-            value: redemption.code,
-            isUsed: true,
-          },
-        },
-      })
-        .select('_id')
-        .lean();
+    // Check access using optimized query
+    const redemptionQueries = student.redeemedCodes.map((redemption) => ({
+      _id: redemption.codesGroup,
+      expiration: { $gt: now },
+      'codes.value': redemption.code,
+      'codes.isUsed': true,
+      materials: materialId,
+    }));
 
-      if (codesGroup) {
-        hasAccess = true;
-        break;
-      }
+    if (redemptionQueries.length > 0) {
+      const codesGroup = await CodesGroup.findOne({ $or: redemptionQueries });
+      if (codesGroup) hasAccess = true;
     }
 
     if (!hasAccess) {
       return res
         .status(403)
-        .json({ message: 'ليس لديك صلاحية الوصول لهذه المجموعة.' }); // "You don't have access to this question group."
+        .json({ message: 'ليس لديك صلاحية الوصول لهذه المجموعة.' });
     }
 
-    // Get the specific question by its index
-    const selectedQuestion = questionGroup.questions[questionIndex];
+    // Validate question index
+    if (questionIndex >= questionGroup.questions.length) {
+      return res.status(400).json({ message: 'فهرس السؤال خارج النطاق.' });
+    }
 
-    // Modify the question group to include only the selected question
+    // Prepare response
     const response = {
       ...questionGroup,
-      questions: [selectedQuestion],
+      material: materialId, // Include material ID in response
+      questions: [questionGroup.questions[questionIndex]],
     };
 
     res.status(200).json(response);
   } catch (err) {
     console.error('Error in getQuestionGroupWithQuestion:', err);
-    res.status(err.statusCode || 500).json({
-      error: err.message || 'حدث خطأ في الخادم.', // "An error occurred on the server."
+    res.status(500).json({
+      error: err.message || 'حدث خطأ في الخادم.',
     });
   }
 };

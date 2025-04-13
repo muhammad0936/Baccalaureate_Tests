@@ -32,6 +32,9 @@ const {
 const { updateFcmToken } = require('../controllers/Student/FcmToken');
 const { getSellCenters } = require('../controllers/Admin/SellCenter');
 const { getMaterials } = require('../controllers/Admin/Material');
+const { getUnits } = require('../controllers/Admin/Unit');
+const { getLessons } = require('../controllers/Admin/Lesson');
+const { getUserNotifications } = require('../controllers/Student/Notification');
 router.post('/otp', sendOtp);
 router.post('/signup', signup);
 router.post('/login', login);
@@ -45,6 +48,9 @@ router.get('/freeCourses', isAuth, getFreeCourses),
   router.get('/freeVideos', isAuth, getFreeVideos);
 
 router.get('/materials', isAuth, getMaterials);
+router.get('/accessibleMaterials', isAuth, getAccessibleMaterials);
+router.get('/units', multerGlobal, isAuth, getUnits);
+router.get('/lessons', multerGlobal, isAuth, getLessons);
 router.get('/questions', isAuth, getAccessibleQuestions);
 router.get('/question', isAuth, getQuestionGroupWithQuestion);
 router.get('/courses', isAuth, getAccessibleCoursesByMaterial);
@@ -61,5 +67,7 @@ router.get('/favorites', isAuth, getFavoriteQuestionGroups);
 router.get('/sellCenters', isAuth, getSellCenters);
 
 router.get('/redeemCodes', isAuth, getCodesInfo);
+
+router.get('/notifications', isAuth, getUserNotifications);
 
 module.exports = router;
