@@ -26,21 +26,32 @@ exports.createQuestionGroup = [
     .isArray({ min: 1 })
     .withMessage('يجب إدخال مجموعة من الأسئلة.'),
 
+  // Add infoImages validations
+  body('questions.*.infoImages')
+    .optional()
+    .isArray()
+    .withMessage('يجب أن تكون صور المعلومات مصفوفة.'),
+  body('questions.*.infoImages.*.filename')
+    .notEmpty()
+    .withMessage('اسم ملف صورة المعلومات مطلوب.')
+    .isString(),
+  body('questions.*.infoImages.*.accessUrl')
+    .notEmpty()
+    .withMessage('رابط الوصول لصورة المعلومات مطلوب.')
+    .isString(),
+
   body('questions').custom((questions) => {
     questions.forEach((question, index) => {
-      // Validate question text
       if (!question.text?.trim()) {
         throw new Error(`نص السؤال مطلوب للسؤال رقم ${index + 1}.`);
       }
 
-      // All questions must have at least 2 choices
       if (!question.choices?.length || question.choices.length < 2) {
         throw new Error(
           `يجب أن يحتوي السؤال رقم ${index + 1} على خيارين على الأقل.`
         );
       }
 
-      // Validate choices structure
       question.choices.forEach((choice, choiceIndex) => {
         if (!choice.text?.trim()) {
           throw new Error(
@@ -51,18 +62,36 @@ exports.createQuestionGroup = [
         }
       });
 
-      // Validate correct answers based on isMultipleChoice
       const correctChoices = question.choices.filter((c) => c.isCorrect).length;
       if (correctChoices < 1) {
         throw new Error(
           `يجب تحديد إجابة صحيحة واحدة على الأقل في السؤال رقم ${index + 1}.`
         );
       }
+
+      // Validate infoImages structure
+      if (question.infoImages) {
+        question.infoImages.forEach((img, imgIndex) => {
+          if (!img.filename?.trim()) {
+            throw new Error(
+              `اسم الملف مطلوب لصورة المعلومات ${imgIndex + 1} في السؤال ${
+                index + 1
+              }.`
+            );
+          }
+          if (!img.accessUrl?.trim()) {
+            throw new Error(
+              `رابط الوصول مطلوب لصورة المعلومات ${imgIndex + 1} في السؤال ${
+                index + 1
+              }.`
+            );
+          }
+        });
+      }
     });
     return true;
   }),
 
-  // Question validations
   body('questions.*.text').notEmpty().withMessage('نص السؤال مطلوب.'),
   body('questions.*.isMultipleChoice')
     .optional()
@@ -101,7 +130,7 @@ exports.createQuestionGroup = [
       if (!lessonExists) {
         return res
           .status(400)
-          .json({ message: 'عذراً، الدرس المحددة غير موجودة.' });
+          .json({ message: 'عذراً، الدرس المحدد غير موجود.' });
       }
 
       const newGroup = new QuestionGroup(groupData);
@@ -168,14 +197,30 @@ exports.deleteQuestionGroup = [
           .json({ error: 'عذراً، لم يتم العثور على السؤال.' });
       }
 
-      // Capture file info before any deletion
+      // Capture all files for deletion
       const bunnyDeletions = [];
+
+      // Group image
       if (group.image?.accessUrl) {
         bunnyDeletions.push({
           type: 'question_image',
           accessUrl: group.image.accessUrl,
         });
       }
+
+      // Info images from questions
+      group.questions.forEach((question) => {
+        if (question.infoImages) {
+          question.infoImages.forEach((img) => {
+            if (img.accessUrl) {
+              bunnyDeletions.push({
+                type: 'question_info_image',
+                accessUrl: img.accessUrl,
+              });
+            }
+          });
+        }
+      });
 
       // Delete the entire question group
       await QuestionGroup.deleteOne({ _id: questionGroupId });

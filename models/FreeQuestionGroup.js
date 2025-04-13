@@ -43,6 +43,12 @@ const freeQuestionGroupSchema = new Schema(
         information: {
           type: String,
         },
+        infoImages: [
+          {
+            filename: String,
+            accessUrl: String,
+          },
+        ],
       },
     ],
   }
