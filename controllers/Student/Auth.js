@@ -100,7 +100,7 @@ exports.sendOtp = async (req, res) => {
 
     // Send the OTP via email.
     await transporter.sendMail({
-      from: '"System Verification" <${process.env.MAIL_FROM}>',
+      from: 'Fahim Team',
       to: email,
       subject: 'كلمة المرور لمرة واحدة',
       html: `
