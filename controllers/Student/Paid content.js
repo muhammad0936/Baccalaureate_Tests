@@ -364,7 +364,7 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
           select: 'material',
         },
       })
-      .select('paragraph questions')
+      .select('paragraph questions images')
       .lean();
 
     if (!questionGroup) {

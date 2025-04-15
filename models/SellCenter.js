@@ -13,6 +13,10 @@ const sellCenterSchema = new Schema(
       type: String,
       unique: true,
     },
+    image: {
+      filename: String,
+      accessUrl: String,
+    },
   },
   { timestamps: true }
 );

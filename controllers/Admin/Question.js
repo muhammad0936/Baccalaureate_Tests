@@ -11,12 +11,16 @@ exports.createQuestionGroup = [
     .isString()
     .withMessage('يجب أن تكون الفقرة نصية.'),
 
-  body('image.filename')
-    .optional()
+  // Updated image validations for array
+  body('images').optional().isArray().withMessage('يجب أن تكون الصور مصفوفة.'),
+  body('images.*.filename')
+    .notEmpty()
+    .withMessage('اسم ملف الصورة مطلوب.')
     .isString()
     .withMessage('يجب أن يكون اسم الملف نصاً.'),
-  body('image.accessUrl')
-    .optional()
+  body('images.*.accessUrl')
+    .notEmpty()
+    .withMessage('رابط الوصول للصورة مطلوب.')
     .isString()
     .withMessage('يجب أن يكون رابط الوصول نصاً.'),
 
@@ -26,7 +30,6 @@ exports.createQuestionGroup = [
     .isArray({ min: 1 })
     .withMessage('يجب إدخال مجموعة من الأسئلة.'),
 
-  // Add infoImages validations
   body('questions.*.infoImages')
     .optional()
     .isArray()
@@ -69,7 +72,6 @@ exports.createQuestionGroup = [
         );
       }
 
-      // Validate infoImages structure
       if (question.infoImages) {
         question.infoImages.forEach((img, imgIndex) => {
           if (!img.filename?.trim()) {
@@ -125,7 +127,6 @@ exports.createQuestionGroup = [
       }
 
       const groupData = req.body;
-      // Verify lesson exists
       const lessonExists = await Lesson.exists({ _id: groupData.lesson });
       if (!lessonExists) {
         return res
@@ -197,18 +198,20 @@ exports.deleteQuestionGroup = [
           .json({ error: 'عذراً، لم يتم العثور على السؤال.' });
       }
 
-      // Capture all files for deletion
       const bunnyDeletions = [];
 
-      // Group image
-      if (group.image?.accessUrl) {
-        bunnyDeletions.push({
-          type: 'question_image',
-          accessUrl: group.image.accessUrl,
+      // Updated images deletion handling
+      if (group.images && group.images.length > 0) {
+        group.images.forEach((image) => {
+          if (image.accessUrl) {
+            bunnyDeletions.push({
+              type: 'question_image',
+              accessUrl: image.accessUrl,
+            });
+          }
         });
       }
 
-      // Info images from questions
       group.questions.forEach((question) => {
         if (question.infoImages) {
           question.infoImages.forEach((img) => {
@@ -222,10 +225,8 @@ exports.deleteQuestionGroup = [
         }
       });
 
-      // Delete the entire question group
       await QuestionGroup.deleteOne({ _id: questionGroupId });
 
-      // Process file deletions
       const deletionResults = [];
       for (const file of bunnyDeletions) {
         try {

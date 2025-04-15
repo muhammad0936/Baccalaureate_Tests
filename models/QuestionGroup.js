@@ -5,10 +5,12 @@ const Schema = mongoose.Schema;
 const questionGroupSchema = new Schema(
   {
     paragraph: String,
-    image: {
-      filename: String,
-      accessUrl: String,
-    },
+    images: [
+      {
+        filename: String,
+        accessUrl: String,
+      },
+    ],
     lesson: {
       type: Schema.Types.ObjectId,
       ref: 'Lesson',

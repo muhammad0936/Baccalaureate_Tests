@@ -11,6 +11,14 @@ exports.createSellCenter = [
     .optional()
     .isString()
     .withMessage('address must be a string.'),
+  body('image.filename')
+    .optional()
+    .isString()
+    .withMessage('اسم ملف الأيقونة يجب أن يكون نصاً.'),
+  body('image.accessUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط وصول الأيقونة يجب أن يكون نصاً.'),
 
   async (req, res) => {
     try {
@@ -23,9 +31,11 @@ exports.createSellCenter = [
 
       const sellCenter = new SellCenter(req.body);
       await sellCenter.save();
-      const { _id, name, phone, address } = sellCenter;
+      const { _id, name, phone, address, image } = sellCenter;
 
-      res.status(201).json({ sellCenter: { _id, name, phone, address } });
+      res
+        .status(201)
+        .json({ sellCenter: { _id, name, phone, address, image } });
     } catch (err) {
       res
         .status(err.statusCode || 500)
@@ -39,7 +49,11 @@ exports.getSellCenters = async (req, res) => {
     const { page, limit } = req.query;
     const sellCenters = await SellCenter.paginate(
       {},
-      { page: page || 1, limit: limit || 10, select: 'name phone address' }
+      {
+        page: page || 1,
+        limit: limit || 10,
+        select: 'name phone address image',
+      }
     );
     res.status(200).json(sellCenters);
   } catch (err) {

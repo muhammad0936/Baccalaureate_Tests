@@ -16,6 +16,14 @@ exports.createCourse = [
     .withMessage('وصف الدورة يجب أن يكون نصاً.'),
   body('material').isMongoId().withMessage('معرف المادة غير صحيح.'),
   body('teacher').isMongoId().withMessage('معرف المدرس غير صحيح.'),
+  body('icon.filename')
+    .optional()
+    .isString()
+    .withMessage('اسم ملف الأيقونة يجب أن يكون نصاً.'),
+  body('icon.accessUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط وصول الأيقونة يجب أن يكون نصاً.'),
   // Correct the field names to use lowercase 'promoVideo720'
   body('promoVideo720.accessUrl')
     .optional()
@@ -83,6 +91,7 @@ exports.createCourse = [
         teacher,
         promoVideo720,
         seekPoints,
+        icon,
       } = course;
       res.status(201).json({
         course: {
@@ -91,6 +100,7 @@ exports.createCourse = [
           description,
           material,
           teacher,
+          icon,
           promoVideo720,
           seekPoints, // Include seekPoints in the response
         },
@@ -147,7 +157,7 @@ exports.getCourses = async (req, res) => {
       //   { path: 'material', select: 'name' },
       //   { path: 'teacher', select: 'fname lname phone' },
       // ],
-      select: 'name description material teacher promoVideo720 seekPoints',
+      select: 'name description material teacher icon promoVideo720 seekPoints',
     });
 
     return res.status(200).json(courses);

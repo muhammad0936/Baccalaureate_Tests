@@ -19,6 +19,10 @@ const courseSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Teacher',
     },
+    icon: {
+      filename: String,
+      accessUrl: String,
+    },
     promoVideo720: {
       accessUrl: String,
       videoId: String,
