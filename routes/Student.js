@@ -10,7 +10,11 @@ const {
   sendOtp,
 } = require('../controllers/Student/Auth');
 const { redeemCode, getCodesInfo } = require('../controllers/Student/Code');
-const { getFreeQuestions } = require('../controllers/Student/FreeQuestion');
+const {
+  getFreeQuestions,
+  getFreeQuestionsjByLesson,
+  getFreeQuestionsByMaterial,
+} = require('../controllers/Student/FreeQuestion');
 const {
   getAccessibleMaterials,
   getAccessibleQuestions,
@@ -43,7 +47,8 @@ router.delete('/deleteAccount', isAuth, deleteAccount);
 
 router.post('/redeemCode', isAuth, redeemCode);
 
-router.get('/freeQuestions', isAuth, getFreeQuestions);
+router.get('/freeQuestions', isAuth, getFreeQuestionsjByLesson);
+router.get('/freeQuestionsByMaterial', isAuth, getFreeQuestionsByMaterial);
 router.get('/freeCourses', isAuth, getFreeCourses),
   router.get('/freeVideos', isAuth, getFreeVideos);
 

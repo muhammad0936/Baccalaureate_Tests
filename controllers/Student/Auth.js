@@ -100,7 +100,7 @@ exports.sendOtp = async (req, res) => {
 
     // Send the OTP via email.
     await transporter.sendMail({
-      from: 'Fahim Team',
+      from: '"فريق فهيم" <fhym6278@gmail.com>',
       to: email,
       subject: 'كلمة المرور لمرة واحدة',
       html: `
