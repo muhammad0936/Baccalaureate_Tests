@@ -203,7 +203,7 @@ exports.signup = [
 
       const { fname, lname, email, otp, password, phone, image } = req.body;
 
-      console.log(`Signup requested for email: ${email}`);
+      // console.log(`Signup requested for email: ${email}`);
 
       // Validate required fields.
       if (!fname) {

@@ -9,10 +9,7 @@ const sellCenterSchema = new Schema(
       required: true,
     },
     address: String,
-    phone: {
-      type: String,
-      unique: true,
-    },
+    phone: String,
     image: {
       filename: String,
       accessUrl: String,
@@ -21,5 +18,13 @@ const sellCenterSchema = new Schema(
   { timestamps: true }
 );
 sellCenterSchema.plugin(mongoosePaginate);
-
+sellCenterSchema.index(
+  { phone: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $type: 'string' },
+    },
+  }
+);
 module.exports = mongoose.model('SellCenter', sellCenterSchema);

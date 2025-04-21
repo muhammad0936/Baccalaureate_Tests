@@ -7,7 +7,7 @@ exports.getResolutions = async (req, res) => {
     const videoPlayData = await axios.get(playDataUrl, {
       AccessKey: API_KEY,
     });
-    console.log(videoPlayData);
+    // console.log(videoPlayData);
     let resolutions = videoPlayData?.data?.video?.availableResolutions;
     if (resolutions) {
       const resolutionsArray = resolutions.split(',');

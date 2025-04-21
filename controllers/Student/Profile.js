@@ -82,7 +82,7 @@ exports.updateProfile = [
       const updates = req.body;
 
       const student = await Student.findById(req.userId);
-      console.log(updates);
+      // console.log(updates);
 
       if (!student) {
         return res.status(StatusCodes.NOT_FOUND).json({

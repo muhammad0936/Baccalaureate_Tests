@@ -85,7 +85,7 @@ exports.sendNotificationToAllStudents = async (req, res) => {
       { fcmToken: { $exists: true, $ne: '' } },
       'fcmToken _id' // Include student ID for notification storage
     ).cursor();
-    console.log(cursor);
+    // console.log(cursor);
     try {
       let batch = [];
       for await (const student of cursor) {
