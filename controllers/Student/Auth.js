@@ -160,6 +160,12 @@ const validateSignup = [
     .notEmpty()
     .isEmail()
     .withMessage('صيغة البريد الإلكتروني غير صحيحة.'),
+  body('deviceId')
+    .trim()
+    .notEmpty()
+    .withMessage('رمز deviceId مطلوب')
+    .isString()
+    .withMessage('رمز deviceId يجب أن يكون نصاً'),
   body('otp')
     .trim()
     .notEmpty()
@@ -187,6 +193,12 @@ const validateSignup = [
 const validateLogin = [
   body('email').notEmpty().withMessage('البريد الالكتروني مطلوب.'),
   body('password').trim().notEmpty().withMessage('كلمة المرور مطلوبة.'),
+  body('deviceId')
+    .trim()
+    .notEmpty()
+    .withMessage('رمز deviceId مطلوب')
+    .isString()
+    .withMessage('رمز deviceId يجب أن يكون نصاً'),
 ];
 
 exports.signup = [
@@ -201,7 +213,8 @@ exports.signup = [
           .json({ errors: errors.array() });
       }
 
-      const { fname, lname, email, otp, password, phone, image } = req.body;
+      const { fname, lname, email, otp, password, deviceId, phone, image } =
+        req.body;
 
       // console.log(`Signup requested for email: ${email}`);
 
@@ -227,6 +240,11 @@ exports.signup = [
         return res
           .status(StatusCodes.BAD_REQUEST)
           .json({ message: 'الرجاء إدخال الرمز التأكيدي.' });
+      }
+      if (!deviceId) {
+        return res
+          .status(StatusCodes.BAD_REQUEST)
+          .json({ message: 'الرجاء إدخال معرف الجهاز.' });
       }
 
       // Retrieve the OTP record sent to the specified email.
@@ -269,6 +287,7 @@ exports.signup = [
         fname,
         lname,
         email,
+        deviceId,
         phone,
         password: hashedPassword,
         image: image || { filename: '', accessUrl: '' },
@@ -305,7 +324,7 @@ exports.login = [
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
       }
-      const { email, password } = req.body;
+      const { email, password, deviceId } = req.body;
       const loadedStudent = await Student.findOne({ email })
         .select('+password')
         .lean();
@@ -326,6 +345,11 @@ exports.login = [
         return res
           .status(401)
           .json({ message: 'بيانات تسجيل الدخول غير صالحة!' });
+      }
+      if (loadedStudent.deviceId !== deviceId) {
+        return res
+          .status(401)
+          .json({ message: 'لا يمكن فتح الحساب من جهاز مختلف' });
       }
 
       const token = jwt.sign(

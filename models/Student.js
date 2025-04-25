@@ -7,6 +7,10 @@ const studentSchema = new Schema(
     fname: { type: String, required: true },
     lname: { type: String },
     email: { type: String, unique: true, sparse: true },
+    deviceId: {
+      type: String,
+      required: true,
+    },
     password: { type: String, required: true },
     phone: String,
     image: {
