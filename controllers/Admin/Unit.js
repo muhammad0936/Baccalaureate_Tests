@@ -59,7 +59,7 @@ exports.createUnit = [
 // Retrieve units with optional filters and pagination
 exports.getUnits = async (req, res) => {
   try {
-    const { page, limit, name, material } = req.query;
+    const { page = 1, limit = 10, name, material } = req.query;
     const filter = {};
 
     if (name) {
@@ -77,13 +77,26 @@ exports.getUnits = async (req, res) => {
       filter.material = new mongoose.Types.ObjectId(material);
     }
 
-    const units = await Unit.paginate(filter, {
-      page: parseInt(page, 10) || 1,
-      limit: parseInt(limit, 10) || 10,
-      select: 'name color icon material',
-    });
+    const aggregateQuery = Unit.aggregate()
+      .match(filter)
+      .lookup({
+        from: 'lessons', // collection name for Lesson documents
+        localField: '_id', // the field in Unit to match on
+        foreignField: 'unit', // the field in Lesson referencing Unit
+        as: 'lessons',
+      })
+      .addFields({
+        lessonCount: { $size: '$lessons' },
+      })
+      .project({ lessons: 0 }); // Optionally remove the lessons array
 
-    res.status(200).json(units);
+    // Apply skip and limit for pagination
+    aggregateQuery.skip((parseInt(page, 10) - 1) * (parseInt(limit, 10) || 10));
+    aggregateQuery.limit(parseInt(limit, 10) || 10);
+
+    const unitsWithCount = await aggregateQuery.exec();
+
+    res.status(200).json(unitsWithCount);
   } catch (err) {
     res
       .status(err.statusCode || 500)
