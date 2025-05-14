@@ -264,3 +264,165 @@ exports.deleteQuestionGroup = [
     }
   },
 ];
+
+exports.deleteQuestion = [
+  // Validate IDs and index
+  param('questionGroupId')
+    .isMongoId()
+    .withMessage('معرف مجموعة الأسئلة غير صالح.'),
+  param('questionIndex')
+    .isInt({ min: 0 })
+    .withMessage('رقم السؤال يجب أن يكون عدداً صحيحاً غير سالب.'),
+
+  // Controller logic
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { questionGroupId, questionIndex } = req.params;
+      const group = await QuestionGroup.findById(questionGroupId);
+
+      if (!group) {
+        return res.status(404).json({ message: 'مجموعة الأسئلة غير موجودة.' });
+      }
+
+      // Check if index is valid
+      if (questionIndex >= group.questions.length) {
+        return res.status(400).json({
+          message: `السؤال رقم ${questionIndex + 1} غير موجود في المجموعة.`,
+        });
+      }
+
+      // Remove the question
+      group.questions.splice(questionIndex, 1);
+      await group.save();
+
+      res.json({ message: 'تم حذف السؤال بنجاح.' });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'حدث خطأ في الخادم.' });
+    }
+  },
+];
+
+exports.updateQuestion = [
+  // Validate IDs and index
+  param('questionGroupId')
+    .isMongoId()
+    .withMessage('معرف مجموعة الأسئلة غير صالح.'),
+  param('questionIndex')
+    .isInt({ min: 0 })
+    .withMessage('رقم السؤال يجب أن يكون عدداً صحيحاً غير سالب.'),
+
+  // Validate incoming question data (similar to create)
+  body('text').optional().notEmpty().withMessage('نص السؤال مطلوب.'),
+  body('isMultipleChoice')
+    .optional()
+    .isBoolean()
+    .withMessage('يجب أن يكون isMultipleChoice قيمة منطقية.'),
+  body('isEnglish')
+    .optional()
+    .isBoolean()
+    .withMessage('يجب أن يكون isEnglish قيمة منطقية.'),
+  body('information')
+    .optional()
+    .isString()
+    .withMessage('يجب أن تكون المعلومات نصاً.'),
+  body('choices')
+    .optional()
+    .isArray({ min: 2 })
+    .withMessage('الخيارات يجب أن تكون قائمة تحتوي على خيارين على الأقل.'),
+  body('choices.*.text')
+    .optional()
+    .notEmpty()
+    .withMessage('نص الاختيار مطلوب.'),
+  body('choices.*.isCorrect')
+    .optional()
+    .isBoolean()
+    .withMessage('يجب أن يكون isCorrect قيمة منطقية.'),
+
+  // Custom validation for choices and infoImages
+  body().custom((bodyData) => {
+    const question = bodyData;
+
+    // Validate text (if provided)
+    if (question.text && !question.text.trim()) {
+      throw new Error('نص السؤال مطلوب.');
+    }
+
+    // Validate choices (if provided)
+    if (question.choices) {
+      if (question.choices.length < 2) {
+        throw new Error('يجب أن يحتوي السؤال على خيارين على الأقل.');
+      }
+
+      let correctChoices = 0;
+      question.choices.forEach((choice, index) => {
+        if (!choice.text?.trim()) {
+          throw new Error(`نص الاختيار مطلوب للاختيار رقم ${index + 1}.`);
+        }
+        if (choice.isCorrect) correctChoices++;
+      });
+
+      if (correctChoices < 1) {
+        throw new Error('يجب تحديد إجابة صحيحة واحدة على الأقل.');
+      }
+    }
+
+    // Validate infoImages (if provided)
+    if (question.infoImages) {
+      question.infoImages.forEach((img, index) => {
+        if (!img.filename?.trim() || !img.accessUrl?.trim()) {
+          throw new Error(
+            `يجب تقديم اسم الملف ورابط الوصول لصورة المعلومات رقم ${index + 1}.`
+          );
+        }
+      });
+    }
+
+    return true;
+  }),
+
+  // Controller logic
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { questionGroupId, questionIndex } = req.params;
+      const updates = req.body;
+
+      const group = await QuestionGroup.findById(questionGroupId);
+      if (!group) {
+        return res.status(404).json({ message: 'مجموعة الأسئلة غير موجودة.' });
+      }
+
+      // Check if index is valid
+      if (questionIndex >= group.questions.length) {
+        return res.status(400).json({
+          message: `السؤال رقم ${questionIndex + 1} غير موجود في المجموعة.`,
+        });
+      }
+
+      // Update the question
+      const questionToUpdate = group.questions[questionIndex];
+      Object.keys(updates).forEach((key) => {
+        questionToUpdate[key] = updates[key];
+      });
+
+      await group.save();
+      res.json({
+        message: 'تم تحديث السؤال بنجاح.',
+        question: questionToUpdate,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'حدث خطأ في الخادم.' });
+    }
+  },
+];
