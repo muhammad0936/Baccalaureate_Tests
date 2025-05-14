@@ -87,20 +87,21 @@ exports.sendOtp = async (req, res) => {
     }
 
     // Configure the email transporter.
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      pool: true,
-      auth: {
-        user: process.env.MAIL_USERNAME,
-        pass: process.env.MAIL_PASSWORD,
-      },
-      // logger: process.env.NODE_ENV !== 'production',
-      // debug: process.env.NODE_ENV !== 'production',
-    });
+const transporter = nodemailer.createTransport({
+  host: process.env.HOSTINGER_SMTP_HOST,
+  port: parseInt(process.env.HOSTINGER_SMTP_PORT),
+  secure: true, // Use SSL (port 465)
+  auth: {
+    user: process.env.HOSTINGER_EMAIL,
+    pass: process.env.HOSTINGER_EMAIL_PASSWORD,
+  },
+  pool: true, // Enable connection pooling
+  maxConnections: 5, // Limit concurrent connections
+});
 
     // Send the OTP via email.
     await transporter.sendMail({
-      from: '"فريق فهيم" <fhym6278@gmail.com>',
+      from: `فريق فهيم <${process.env.HOSTINGER_EMAIL}>`,
       to: email,
       subject: 'كلمة المرور لمرة واحدة',
       html: `
