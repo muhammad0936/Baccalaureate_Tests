@@ -13,6 +13,7 @@ const {
   createMaterial,
   getMaterials,
   deleteMaterial,
+  updateMaterial,
 } = require('../controllers/Admin/Material');
 
 const {
@@ -24,11 +25,13 @@ const {
   createCourse,
   getCourses,
   deleteCourse,
+  updateCourse,
 } = require('../controllers/Admin/Course');
 const {
   createVideo,
   getVideos,
   deleteVideo,
+  updateVideo,
 } = require('../controllers/Admin/Video');
 const {
   createCodesGroup,
@@ -45,6 +48,7 @@ const {
   deleteQuestionGroup,
   deleteQuestion,
   updateQuestion,
+  updateQuestionGroup,
 } = require('../controllers/Admin/Question');
 const { uploadVideo, addVideo } = require('../controllers/Admin/UploadVideo');
 const BunnyVideoUploader = require('../middlewares/BunnyVideoUpload');
@@ -57,6 +61,7 @@ const {
 const {
   createSellCenter,
   deleteSellCenter,
+  updateSellCenter,
 } = require('../controllers/Admin/SellCenter');
 const {
   createUnit,
@@ -86,6 +91,7 @@ router.put('/toggleBlock/:id', multerGlobal, isAuth, blockStudent);
 router.get('/checkBlock/:id', multerGlobal, isAuth, checkBlockedStatus);
 
 router.post('/material', multerGlobal, isAuth, createMaterial);
+router.put('/material/:id', multerGlobal, isAuth, updateMaterial);
 router.delete('/material/:id', multerGlobal, isAuth, deleteMaterial);
 
 router.post('/unit', multerGlobal, isAuth, createUnit);
@@ -96,6 +102,7 @@ router.delete('/lesson/:id', multerGlobal, isAuth, deleteLesson);
 
 router.post('/questions', multerGlobal, isAuth, createQuestionGroup);
 router.get('/questions', multerGlobal, isAuth, getQuestionGroups);
+router.put('/question/:id', multerGlobal, isAuth, updateQuestionGroup);
 router.delete('/question/:id', multerGlobal, isAuth, deleteQuestionGroup);
 // Delete a question
 router.delete(
@@ -119,10 +126,12 @@ router.delete('/teacher/:id', multerGlobal, isAuth, deleteTeacher);
 
 router.post('/course', multerGlobal, isAuth, createCourse);
 router.get('/courses', multerGlobal, isAuth, getCourses);
+router.put('/course/:id', multerGlobal, isAuth, updateCourse);
 router.delete('/course/:id', multerGlobal, isAuth, deleteCourse);
 
 router.post('/video', multerGlobal, isAuth, createVideo);
 router.get('/videos', multerGlobal, isAuth, getVideos);
+router.put('/video/:id', multerGlobal, isAuth, updateVideo);
 router.delete('/video/:id', multerGlobal, isAuth, deleteVideo);
 
 router.post('/codesGroup', multerGlobal, isAuth, createCodesGroup);
@@ -137,6 +146,7 @@ router.get('/teachersStatistics', multerGlobal, isAuth, getTeachersStatistics);
 router.post('/sendNotification', isAuth, sendNotificationToAllStudents);
 
 router.post('/sellCenter', isAuth, createSellCenter);
+router.put('/sellCenter/:id', isAuth, updateSellCenter);
 router.delete('/sellCenter/:id', isAuth, deleteSellCenter);
 
 router.get('/notifications', isAuth, getUserNotifications);

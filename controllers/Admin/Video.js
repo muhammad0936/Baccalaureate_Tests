@@ -137,6 +137,146 @@ exports.getVideos = async (req, res) => {
       .json({ error: err.message || 'حدث خطأ في الخادم.' });
   }
 };
+exports.updateVideo = [
+  param('id')
+    .isMongoId()
+    .withMessage('يرجى إدخال معرف الفيديو بشكل صحيح.'),
+  body('name')
+    .optional()
+    .isString()
+    .withMessage('اسم الفيديو يجب أن يكون نصاً.'),
+  body('seekPoints')
+    .optional()
+    .isArray()
+    .withMessage('يجب أن تكون نقاط البحث مصفوفة.'),
+  body('seekPoints.*.moment')
+    .notEmpty()
+    .isString()
+    .withMessage('لحظة النقطة مطلوبة.'),
+  body('seekPoints.*.description')
+    .notEmpty()
+    .isString()
+    .withMessage('وصف النقطة مطلوب.'),
+  body('video720')
+    .optional()
+    .custom((value) => {
+      if (value === null || (typeof value === 'object' && value !== null)) {
+        return true;
+      }
+      return false;
+    })
+    .withMessage('يجب أن تكون بيانات الفيديو إما null أو كائن.'),
+  body('video720.videoId')
+    .if(body('video720').exists().isObject())
+    .notEmpty()
+    .isString()
+    .withMessage('معرف الفيديو مطلوب عند التحديث.'),
+  body('video720.libraryId')
+    .if(body('video720').exists().isObject())
+    .notEmpty()
+    .isString()
+    .withMessage('معرف المكتبة مطلوب عند التحديث.'),
+
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      // Get existing video data
+      const existingVideo = await Video.findById(req.params.id);
+      if (!existingVideo) {
+        return res.status(404).json({ error: 'الفيديو غير موجود.' });
+      }
+
+      const { name, seekPoints, video720 } = req.body;
+      const updateData = { name, seekPoints };
+      let oldBunnyVideos = [];
+
+      // Handle video720 updates
+      if (req.body.video720) {
+          // Check if new video is different from existing
+          const newVideoId = req.body.video720.videoId;
+          const existingVideoId = existingVideo.video720?.videoId;
+          
+          if (newVideoId !== existingVideoId) {
+            // Mark old video for deletion
+            if (existingVideoId) {
+              oldBunnyVideos.push({
+                videoId: existingVideoId,
+                libraryId: existingVideo.video720.libraryId
+              });
+            }
+
+            // Fetch new download URL
+            try {
+              const playDataUrl = `https://video.bunnycdn.com/library/${req.body.video720.libraryId}/videos/${newVideoId}/play?expires=0`;
+              const videoPlayData = await axios.get(playDataUrl, {
+                headers: { AccessKey: process.env.BUNNY_API_KEY },
+              });
+              
+              updateData.video720 = {
+                ...req.body.video720,
+                downloadUrl: videoPlayData.data?.fallbackUrl,
+              };
+            } catch (error) {
+              return res.status(400).json({
+                error: 'فشل في الحصول على بيانات الفيديو من BunnyCDN',
+              });
+            }
+        }
+      }
+
+      // Update video in database
+      const video = await Video.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true }
+      ).select('name seekPoints course video720');
+
+      if (!video) {
+        return res.status(404).json({ error: 'الفيديو غير موجود.' });
+      }
+
+      // Delete old videos from BunnyCDN
+      const deletionResults = [];
+      for (const bunnyVideo of oldBunnyVideos) {
+        try {
+          await axios.delete(
+            `https://video.bunnycdn.com/library/${bunnyVideo.libraryId}/videos/${bunnyVideo.videoId}`,
+            {
+              headers: {
+                Accept: 'application/json',
+                AccessKey: process.env.BUNNY_API_KEY,
+              },
+            }
+          );
+          deletionResults.push({
+            videoId: bunnyVideo.videoId,
+            status: 'success'
+          });
+        } catch (error) {
+          deletionResults.push({
+            videoId: bunnyVideo.videoId,
+            status: 'error',
+            error: error.response?.data || error.message
+          });
+        }
+      }
+
+      res.status(200).json({
+        video,
+        bunnyDeletions: deletionResults
+      });
+    } catch (err) {
+      res.status(500).json({ 
+        error: err.message || 'حدث خطأ في الخادم.' 
+      });
+    }
+  },
+];
 
 // Delete a video by ID
 exports.deleteVideo = [

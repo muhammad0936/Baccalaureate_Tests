@@ -5,7 +5,7 @@ const { body, validationResult } = require('express-validator');
 const mongoose = require('mongoose');
 const Lesson = require('../../models/Lesson');
 
-exports.copyQuestionsToFree = [
+ exports.copyQuestionsToFree = [
   body('numOfGroups')
     .isInt({ min: 1 })
     .withMessage('يرجى إدخال عدد المجموعات كرقم صحيح أكبر من صفر.'),
@@ -23,16 +23,39 @@ exports.copyQuestionsToFree = [
       // حذف جميع المجموعات المجانية الحالية
       await FreeQuestionGroup.deleteMany({});
 
-      // جلب جميع المواد التي تحتوي على مجموعات أسئلة
-      const lessons = await Lesson.find({
-        _id: { $in: await QuestionGroup.distinct('lesson') },
-      });
+      // الحصول على الدروس التي تحتوي على مجموعات أسئلة تحتوي على سؤال واحد فقط
+      const lessonsWithSingleQuestionGroups = await Lesson.aggregate([
+        {
+          $lookup: {
+            from: 'questiongroups',
+            localField: '_id',
+            foreignField: 'lesson',
+            as: 'groups',
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            groups: {
+              $filter: {
+                input: '$groups',
+                as: 'group',
+                cond: { $eq: [{ $size: '$$group.questions' }, 1] },
+              },
+            },
+          },
+        },
+        { $match: { 'groups.0': { $exists: true } } },
+      ]);
 
-      // معالجة كل مادة
-      for (const lesson of lessons) {
-        // اختيار مجموعات عشوائية من المادة الحالية
-        const groups = await QuestionGroup.aggregate([
-          { $match: { lesson: lesson._id } },
+      // معالجة كل درس يحتوي على مجموعات صالحة
+      for (const lesson of lessonsWithSingleQuestionGroups) {
+        // اختيار مجموعات عشوائية من الدروس التي تحتوي على سؤال واحد
+        const sampledGroups = await QuestionGroup.aggregate([
+          { $match: { 
+            _id: { $in: lesson.groups.map(g => g._id) },
+            $expr: { $eq: [{ $size: '$questions' }, 1] } 
+          }},
           { $sample: { size: numOfGroups } },
           {
             $project: {
@@ -46,29 +69,30 @@ exports.copyQuestionsToFree = [
           },
         ]);
 
-        if (groups.length === 0) continue;
+        if (sampledGroups.length === 0) continue;
 
-        // إنشاء نسخة جديدة من المجموعات مع إزالة المعرفات
-        const groupsToInsert = groups.map((group) => ({
+        // إعداد البيانات للإدخال
+        const groupsToInsert = sampledGroups.map(group => ({
           ...group,
-          questions: group.questions.map((question) => ({
+          lesson: lesson._id,
+          questions: group.questions.map(question => ({
             ...question,
-            choices: question.choices.map((choice) => ({
+            choices: question.choices.map(choice => ({
               ...choice,
               _id: new mongoose.Types.ObjectId(),
             })),
           })),
         }));
 
-        // إدخال المجموعات في المجموعات المجانية
-        const result = await FreeQuestionGroup.insertMany(groupsToInsert);
-        totalCopied += result.length;
+        // إدخال المجموعات المحددة
+        const insertedGroups = await FreeQuestionGroup.insertMany(groupsToInsert);
+        totalCopied += insertedGroups.length;
       }
 
       res.status(200).json({
-        message: `تم استبدال جميع المجموعات المجانية بنجاح وإضافة ${totalCopied} مجموعة جديدة.`,
+        message: `تم نسخ ${totalCopied} مجموعة تحتوي على سؤال واحد بنجاح.`,
         totalCopied,
-        lessonsProcessed: lessons.length,
+        lessonsProcessed: lessonsWithSingleQuestionGroups.length,
       });
     } catch (err) {
       res.status(500).json({

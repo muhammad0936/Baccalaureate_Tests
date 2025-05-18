@@ -307,7 +307,124 @@ exports.deleteQuestion = [
     }
   },
 ];
+exports.updateQuestionGroup = [
+  param('id')
+    .isMongoId()
+    .withMessage('يرجى إدخال معرف مجموعة الأسئلة بشكل صحيح.'),
+  
+  // Validation for updatable fields
+  body('paragraph')
+    .optional()
+    .isString()
+    .withMessage('يجب أن تكون الفقرة نصية.'),
+  
+  body('images')
+    .optional()
+    .isArray()
+    .withMessage('يجب أن تكون الصور مصفوفة.'),
+  body('images.*.filename')
+    .if(body('images').exists())
+    .notEmpty()
+    .withMessage('اسم ملف الصورة مطلوب.')
+    .isString()
+    .withMessage('يجب أن يكون اسم الملف نصاً.'),
+  body('images.*.accessUrl')
+    .if(body('images').exists())
+    .notEmpty()
+    .withMessage('رابط الوصول للصورة مطلوب.')
+    .isString()
+    .withMessage('يجب أن يكون رابط الوصول نصاً.'),
 
+  body('lesson')
+    .optional()
+    .isMongoId()
+    .withMessage('معرف الدرس غير صالح.'),
+
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const group = await QuestionGroup.findById(req.params.id);
+      if (!group) {
+        return res.status(404).json({ error: 'مجموعة الأسئلة غير موجودة.' });
+      }
+
+      const { paragraph, images, lesson } = req.body;
+      const updateData = {};
+      const bunnyDeletions = [];
+
+      // Handle paragraph update
+      if (paragraph !== undefined) {
+        updateData.paragraph = paragraph;
+      }
+
+      // Handle images update
+      if (images !== undefined) {
+        // Track removed images for deletion
+        const oldImages = group.images || [];
+        const newImageUrls = new Set((images || []).map(img => img.accessUrl));
+        
+        oldImages.forEach(img => {
+          if (!newImageUrls.has(img.accessUrl)) {
+            bunnyDeletions.push(img.accessUrl);
+          }
+        });
+
+        updateData.images = images;
+      }
+
+      // Handle lesson update
+      if (lesson) {
+        const lessonExists = await Lesson.exists({ _id: lesson });
+        if (!lessonExists) {
+          return res.status(400).json({ message: 'الدرس المحدد غير موجود.' });
+        }
+        updateData.lesson = lesson;
+      }
+
+      // Update the group
+      const updatedGroup = await QuestionGroup.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      );
+
+      // Delete old images from BunnyCDN
+      const deletionResults = [];
+      for (const accessUrl of bunnyDeletions) {
+        try {
+          await axios.delete(accessUrl, {
+            headers: {
+              Accept: 'application/json',
+              AccessKey: process.env.BUNNY_STORAGE_API_KEY,
+            },
+          });
+          deletionResults.push({ accessUrl, status: 'success' });
+        } catch (error) {
+          deletionResults.push({
+            accessUrl,
+            status: 'error',
+            error: error.response?.data || error.message,
+          });
+        }
+      }
+
+      res.status(200).json({
+        group: updatedGroup,
+        bunnyDeletions: deletionResults,
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err.message || 'حدث خطأ في الخادم.',
+        bunnyDeletions: [],
+      });
+    }
+  },
+];
 exports.updateQuestion = [
   // Validate IDs and index
   param('questionGroupId')

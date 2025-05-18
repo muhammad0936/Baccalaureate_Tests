@@ -113,6 +113,186 @@ exports.createCourse = [
   },
 ];
 
+exports.updateCourse = [
+  param('id')
+    .isMongoId()
+    .withMessage('يرجى إدخال معرف الدورة بشكل صحيح.'),
+  body('name')
+    .optional()
+    .isString()
+    .withMessage('اسم الدورة يجب أن يكون نصاً.'),
+  body('description')
+    .optional()
+    .isString()
+    .withMessage('الوصف يجب أن يكون نصاً.'),
+  body('icon.filename')
+    .optional()
+    .isString()
+    .withMessage('اسم ملف الأيقونة يجب أن يكون نصاً.'),
+  body('icon.accessUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط الأيقونة يجب أن يكون نصاً.'),
+  body('seekPoints')
+    .optional()
+    .isArray()
+    .withMessage('يجب أن تكون نقاط البحث مصفوفة.'),
+  body('seekPoints.*.moment')
+    .notEmpty()
+    .isString()
+    .withMessage('لحظة النقطة مطلوبة.'),
+  body('seekPoints.*.description')
+    .notEmpty()
+    .isString()
+    .withMessage('وصف النقطة مطلوب.'),
+  // Add validations for promoVideo720
+  body('promoVideo720')
+    .optional()
+    .custom((value) => {
+      if (value === null || (typeof value === 'object' && value !== null)) {
+        return true;
+      }
+      return false;
+    })
+    .withMessage('يجب أن تكون الفيديو الترويجي إما null أو كائن.'),
+  body('promoVideo720.videoId')
+    .if(body('promoVideo720').exists().isObject())
+    .notEmpty()
+    .isString()
+    .withMessage('معرف الفيديو الترويجي مطلوب عند التحديث.'),
+  body('promoVideo720.libraryId')
+    .if(body('promoVideo720').exists().isObject())
+    .notEmpty()
+    .isString()
+    .withMessage('معرف المكتبة للفيديو الترويجي مطلوب عند التحديث.'),
+  body('promoVideo720.accessUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط الوصول للفيديو الترويجي بجودة 720 يجب أن يكون نصاً.'),
+  body('promoVideo720.downloadUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط التنزيل للفيديو الترويجي بجودة 720 يجب أن يكون نصاً.'),
+
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      // Get existing course data
+      const existingCourse = await Course.findById(req.params.id);
+      if (!existingCourse) {
+        return res.status(404).json({ error: 'الدورة غير موجودة.' });
+      }
+
+      const { name, description, icon, seekPoints } = req.body;
+      const updateData = { name, description, icon, seekPoints };
+      let oldBunnyVideos = [];
+
+      // Handle promoVideo720 update or removal
+      if (req.body.promoVideo720 !== undefined) {
+        if (req.body.promoVideo720 === null) {
+          // Mark existing promo video for deletion
+          if (existingCourse.promoVideo720?.videoId) {
+            oldBunnyVideos.push({
+              videoId: existingCourse.promoVideo720.videoId,
+              libraryId: existingCourse.promoVideo720.libraryId
+            });
+          }
+          updateData.promoVideo720 = null;
+        } else {
+          // Check if new video is different from existing
+          const newVideoId = req.body.promoVideo720.videoId;
+          const existingVideoId = existingCourse.promoVideo720?.videoId;
+
+          if (newVideoId !== existingVideoId) {
+            // Mark old video for deletion
+            if (existingVideoId) {
+              oldBunnyVideos.push({
+                videoId: existingVideoId,
+                libraryId: existingCourse.promoVideo720.libraryId
+              });
+            }
+
+            // Process new promo video
+            const { videoId, libraryId } = req.body.promoVideo720;
+            if (!videoId || !libraryId) {
+              return res.status(400).json({
+                error: 'يجب تقديم معرف الفيديو والمكتبة لتحديث الفيديو الترويجي.',
+              });
+            }
+
+            try {
+              const playDataUrl = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}/play?expires=0`;
+              const videoPlayData = await axios.get(playDataUrl, {
+                headers: { AccessKey: process.env.BUNNY_API_KEY },
+              });
+              req.body.promoVideo720.downloadUrl =
+                videoPlayData.data?.fallbackUrl;
+            } catch (error) {
+              return res.status(400).json({
+                error: 'فشل في الحصول على رابط الفيديو الترويجي من BunnyCDN.',
+              });
+            }
+          }
+
+          updateData.promoVideo720 = req.body.promoVideo720;
+        }
+      }
+
+      // Update course in database
+      const course = await Course.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true }
+      ).select('name description icon seekPoints material teacher promoVideo720');
+
+      if (!course) {
+        return res.status(404).json({ error: 'الدورة غير موجودة.' });
+      }
+
+      // Delete old videos from BunnyCDN
+      const deletionResults = [];
+      for (const bunnyVideo of oldBunnyVideos) {
+        try {
+          await axios.delete(
+            `https://video.bunnycdn.com/library/${bunnyVideo.libraryId}/videos/${bunnyVideo.videoId}`,
+            {
+              headers: {
+                Accept: 'application/json',
+                AccessKey: process.env.BUNNY_API_KEY,
+              },
+            }
+          );
+          deletionResults.push({
+            videoId: bunnyVideo.videoId,
+            status: 'success'
+          });
+        } catch (error) {
+          deletionResults.push({
+            videoId: bunnyVideo.videoId,
+            status: 'error',
+            error: error.response?.data || error.message
+          });
+        }
+      }
+
+      res.status(200).json({
+        course,
+        bunnyDeletions: deletionResults
+      });
+    } catch (err) {
+      res.status(500).json({
+        error: err.message || 'حدث خطأ في الخادم.',
+        bunnyDeletions: []
+      });
+    }
+  },
+];
+
 // controllers/courseController.js
 
 exports.getCourses = async (req, res) => {
