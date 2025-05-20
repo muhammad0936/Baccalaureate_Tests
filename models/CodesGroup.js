@@ -31,10 +31,18 @@ const codesGroupSchema = new Schema(
         message: 'Expiration date should be in the future.',
       },
     },
-    materials: [
+    materialsWithQuestions: [
       {
         type: Schema.Types.ObjectId,
         ref: 'Material',
+        required: true,
+      },
+    ],
+    materialsWithLectures: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Material',
+        required: true,
       },
     ],
     courses: [
@@ -46,6 +54,8 @@ const codesGroupSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Indexes
 codesGroupSchema.index(
   { 'codes.value': 1 },
   {
@@ -57,7 +67,8 @@ codesGroupSchema.index(
 );
 
 codesGroupSchema.index({ expiration: 1 });
-codesGroupSchema.index({ materials: 1 });
+codesGroupSchema.index({ materialsWithQuestions: 1 });
+codesGroupSchema.index({ materialsWithLectures: 1 });
 codesGroupSchema.index({ courses: 1 });
 codesGroupSchema.index({
   'codes.isUsed': 1,
@@ -66,5 +77,22 @@ codesGroupSchema.index({
 codesGroupSchema.index({ name: 'text' });
 codesGroupSchema.index({ createdAt: -1 });
 
+// Compound index for materials appearing in both arrays
 codesGroupSchema.plugin(mongoosePaginate);
+
+// Add helper methods for easy access checking
+codesGroupSchema.methods = {
+  hasQuestionAccess: function (materialId) {
+    return this.materialsWithQuestions.includes(materialId);
+  },
+  hasLectureAccess: function (materialId) {
+    return this.materialsWithLectures.includes(materialId);
+  },
+  hasAnyAccess: function (materialId) {
+    return (
+      this.hasQuestionAccess(materialId) || this.hasLectureAccess(materialId)
+    );
+  },
+};
+
 module.exports = mongoose.model('CodesGroup', codesGroupSchema);

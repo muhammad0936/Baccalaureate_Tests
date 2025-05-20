@@ -66,7 +66,11 @@ router.get('/profile', isAuth, getProfile);
 router.put('/profile', isAuth, updateProfile);
 
 router.post('/favorites', isAuth, addFavoriteQuestionGroup);
-router.delete('/favorites', isAuth, removeFavoriteQuestionGroup);
+router.delete(
+  '/favorites/:questionGroupId',
+  isAuth,
+  removeFavoriteQuestionGroup
+);
 router.get('/favorites', isAuth, getFavoriteQuestionGroups);
 
 router.get('/sellCenters', isAuth, getSellCenters);

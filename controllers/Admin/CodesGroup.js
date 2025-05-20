@@ -18,12 +18,18 @@ exports.createCodesGroup = [
     .withMessage('يرجى إدخال اسم المجموعة.')
     .isLength({ max: 100 })
     .withMessage('اسم المجموعة يجب أن يكون أقل من 100 حرف.'),
-  body('materials')
+  body('materialsWithQuestions')
     .optional()
     .isArray()
-    .withMessage('المواد يجب أن تكون في شكل قائمة.')
-    .custom((value) => value.every((id) => ObjectId.isValid(id)))
-    .withMessage('رقم تعريف المادة غير صحيح.'),
+    .withMessage('المواد مع الأسئلة يجب أن تكون في شكل قائمة.')
+    .custom((value) => value.every((id) => mongoose.Types.ObjectId.isValid(id)))
+    .withMessage('يحتوي أحد العناصر على معرف مادة غير صحيح.'),
+  body('materialsWithLectures')
+    .optional()
+    .isArray()
+    .withMessage('المواد مع المحاضرات يجب أن تكون في شكل قائمة.')
+    .custom((value) => value.every((id) => mongoose.Types.ObjectId.isValid(id)))
+    .withMessage('يحتوي أحد العناصر على معرف مادة غير صحيح.'),
   body('courses')
     .optional()
     .isArray()
@@ -48,18 +54,22 @@ exports.createCodesGroup = [
       }
       const {
         name,
-        materials = [],
+        materialsWithQuestions = [],
+        materialsWithLectures = [],
         courses = [],
         codeCount,
         expiration,
       } = req.body;
-
       // Verify materials exist
-      if (materials.length > 0) {
+      const allMaterials = [
+        ...materialsWithQuestions,
+        ...materialsWithLectures,
+      ];
+      if (allMaterials.length > 0) {
         const existingMaterials = await Material.countDocuments({
-          _id: { $in: materials },
+          _id: { $in: allMaterials },
         });
-        if (existingMaterials !== materials.length) {
+        if (existingMaterials !== new Set(allMaterials).size) {
           return res.status(404).json({ error: 'بعض المواد غير موجودة.' });
         }
       }
@@ -83,14 +93,15 @@ exports.createCodesGroup = [
       const codesGroup = new CodesGroup({
         name,
         codes,
-        materials,
+        materialsWithQuestions,
+        materialsWithLectures,
         courses,
         expiration: new Date(expiration),
       });
 
       await codesGroup.save();
 
-      // Updated response
+      // Updated response with codes array
       res.status(201).json({
         message: 'تم إنشاء مجموعة الأكواد بنجاح.',
         data: {
@@ -98,10 +109,11 @@ exports.createCodesGroup = [
           name: codesGroup.name,
           codeCount: codesGroup.codes.length,
           expiration: codesGroup.expiration,
-          codes: codesGroup.codes, // Add this line to include all created codes
+          codes: codesGroup.codes
         },
       });
     } catch (err) {
+      console.error(err);
       res.status(500).json({
         error: err.message || 'حدث خطأ أثناء إنشاء مجموعة الأكواد.',
       });
@@ -139,8 +151,15 @@ exports.getCodesGroups = [
 
       const filter = {};
       if (name) filter.name = { $regex: name, $options: 'i' };
-      if (material) filter.materials = new ObjectId(material);
-      if (course) filter.courses = new ObjectId(course);
+
+      if (material) {
+        filter.$or = [
+          { materialsWithQuestions: material },
+          { materialsWithLectures: material },
+        ];
+      }
+
+      if (course) filter.courses = new mongoose.Types.ObjectId(course);
 
       if (expirationFrom || expirationTo) {
         filter.expiration = {};
@@ -154,31 +173,96 @@ exports.getCodesGroups = [
         sort: { createdAt: -1 },
         populate: [
           {
-            path: 'materials',
-            select: 'name',
+            path: 'materialsWithQuestions',
+            select: 'name college year',
+            populate: {
+              path: 'college',
+              select: 'name university',
+              populate: {
+                path: 'university',
+                select: 'name',
+              },
+            },
+          },
+          {
+            path: 'materialsWithLectures',
+            select: 'name college year',
+            populate: {
+              path: 'college',
+              select: 'name university',
+              populate: {
+                path: 'university',
+                select: 'name',
+              },
+            },
           },
           {
             path: 'courses',
-            select: 'name',
-            populate: {
-              path: 'material',
-              select: 'name',
-            },
+            select: 'name material teacher',
+            populate: [
+              {
+                path: 'material',
+                select: 'name college',
+                populate: {
+                  path: 'college',
+                  select: 'name university',
+                  populate: {
+                    path: 'university',
+                    select: 'name',
+                  },
+                },
+              },
+              {
+                path: 'teacher',
+                select: 'fname lname',
+              },
+            ],
           },
         ],
-        select: 'name codes expiration materials courses',
+        select:
+          'name codes expiration materialsWithQuestions materialsWithLectures courses createdAt',
       });
 
-      // Add usage statistics
+      // Format response with usage statistics
       const enhancedDocs = result.docs.map((group) => ({
         _id: group._id,
         name: group.name,
         expiration: group.expiration,
+        createdAt: group.createdAt,
         totalCodes: group.codes.length,
         usedCodes: group.codes.filter((c) => c.isUsed).length,
-        materials: group.materials,
-        courses: group.courses,
+        materialsWithQuestions: group.materialsWithQuestions.map(
+          (material) => ({
+            _id: material._id,
+            name: material.name,
+            year: material.year,
+            college: {
+              _id: material.college?._id,
+              name: material.college?.name,
+              university: material.college?.university,
+            },
+          })
+        ),
+        materialsWithLectures: group.materialsWithLectures.map((material) => ({
+          _id: material._id,
+          name: material.name,
+          year: material.year,
+          college: {
+            _id: material.college?._id,
+            name: material.college?.name,
+            university: material.college?.university,
+          },
+        })),
+        courses: group.courses.map((course) => ({
+          _id: course._id,
+          name: course.name,
+          material: course.material?.name,
+          teacher: course.teacher
+            ? `${course.teacher.fname} ${course.teacher.lname}`
+            : null,
+        })),
       }));
+
       res.status(200).json({
         message: 'تم جلب مجموعات الأكواد بنجاح.',
         data: enhancedDocs,
@@ -188,7 +272,11 @@ exports.getCodesGroups = [
         limit: result.limit,
       });
     } catch (err) {
-      res.status(500).json({ error: 'حدث خطأ في جلب مجموعات الأكواد.' });
+      console.error('Error in getCodesGroups:', err);
+      res.status(500).json({
+        error: 'حدث خطأ في جلب مجموعات الأكواد.',
+        details: err.message,
+      });
     }
   },
 ];
@@ -198,7 +286,7 @@ exports.getCodesFromGroup = [
     .isMongoId()
     .withMessage('يرجى إدخال رقم تعريف المجموعة بشكل صحيح.'),
   query('page').optional().isInt({ min: 1 }).toInt(),
-  query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+  query('limit').optional().isInt({ min: 1 }).toInt(),
   query('usage')
     .optional()
     .isIn(['all', 'used', 'unused'])

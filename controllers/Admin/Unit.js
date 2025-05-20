@@ -128,3 +128,66 @@ exports.deleteUnit = [
     }
   },
 ];
+
+// Update Unit controller
+exports.updateUnit = [
+  param('id').isMongoId().withMessage('يرجى إدخال رقم تعريف الوحدة بشكل صحيح.'),
+  body('name').optional().notEmpty().withMessage('يرجى إدخال اسم الوحدة.'),
+  body('color')
+    .optional()
+    .isString()
+    .withMessage('لون الوحدة يجب أن يكون نصاً.'),
+  body('icon.filename')
+    .optional()
+    .isString()
+    .withMessage('اسم ملف الأيقونة يجب أن يكون نصاً.'),
+  body('icon.accessUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط وصول الأيقونة يجب أن يكون نصاً.'),
+  body('material').optional().isMongoId().withMessage('معرف المادة غير صحيح.'),
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      // Check if unit exists
+      const unit = await Unit.findById(req.params.id);
+      if (!unit) {
+        return res
+          .status(404)
+          .json({ error: 'عذراً، لم يتم العثور على الوحدة.' });
+      }
+
+      // Check if new material exists if provided
+      if (req.body.material) {
+        const materialExists = await Material.exists({
+          _id: req.body.material,
+        });
+        if (!materialExists) {
+          return res
+            .status(400)
+            .json({ message: 'عذراً، لم يتم العثور على المادة.' });
+        }
+      }
+
+      const updatedUnit = await Unit.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new: true, runValidators: true }
+      ).select('_id name color icon material');
+
+      res.status(200).json({
+        message: 'تم تحديث الوحدة بنجاح.',
+        unit: updatedUnit,
+      });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({
+        error: err.message || 'حدث خطأ أثناء معالجة الطلب.',
+      });
+    }
+  },
+];

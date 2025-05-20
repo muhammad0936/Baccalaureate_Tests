@@ -115,3 +115,64 @@ exports.deleteLesson = [
     }
   },
 ];
+
+// Update Lesson controller
+exports.updateLesson = [
+  param('id').isMongoId().withMessage('يرجى إدخال رقم تعريف الدرس بشكل صحيح.'),
+  body('name').optional().notEmpty().withMessage('يرجى إدخال اسم الدرس.'),
+  body('color')
+    .optional()
+    .isString()
+    .withMessage('لون الدرس يجب أن يكون نصاً.'),
+  body('icon.filename')
+    .optional()
+    .isString()
+    .withMessage('اسم ملف الأيقونة يجب أن يكون نصاً.'),
+  body('icon.accessUrl')
+    .optional()
+    .isString()
+    .withMessage('رابط وصول الأيقونة يجب أن يكون نصاً.'),
+  body('unit').optional().isMongoId().withMessage('معرف الوحدة غير صحيح.'),
+  async (req, res) => {
+    try {
+      await ensureIsAdmin(req.userId);
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      // Check if lesson exists
+      const lesson = await Lesson.findById(req.params.id);
+      if (!lesson) {
+        return res
+          .status(404)
+          .json({ error: 'عذراً، لم يتم العثور على الدرس.' });
+      }
+
+      // Check if new unit exists if provided
+      if (req.body.unit) {
+        const unitExists = await Unit.exists({ _id: req.body.unit });
+        if (!unitExists) {
+          return res
+            .status(400)
+            .json({ message: 'عذراً، لم يتم العثور على الوحدة.' });
+        }
+      }
+
+      const updatedLesson = await Lesson.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new: true, runValidators: true }
+      ).select('_id name color icon unit');
+
+      res.status(200).json({
+        message: 'تم تحديث الدرس بنجاح.',
+        lesson: updatedLesson,
+      });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({
+        error: err.message || 'حدث خطأ أثناء معالجة الطلب.',
+      });
+    }
+  },
+];

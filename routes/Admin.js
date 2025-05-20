@@ -67,11 +67,13 @@ const {
   createUnit,
   getUnits,
   deleteUnit,
+  updateUnit,
 } = require('../controllers/Admin/Unit');
 const {
   createLesson,
   getLessons,
   deleteLesson,
+  updateLesson,
 } = require('../controllers/Admin/Lesson');
 const {
   getStudents,
@@ -79,6 +81,17 @@ const {
   checkBlockedStatus,
 } = require('../controllers/Admin/Student');
 const { getUserNotifications } = require('../controllers/Student/Notification');
+const {
+  createLecture,
+  updateLecture,
+  deleteLecture,
+  getLecturesByMaterial,
+} = require('../controllers/Admin/Lecture');
+const {
+  createCourseFile,
+  getCourseFilesByCourse,
+  deleteCourseFile,
+} = require('../controllers/Admin/CourseFile');
 
 router.post('/addVideo', addVideo);
 router.post('/uploadImage', BunnyImageUploader, uploadImage);
@@ -94,10 +107,22 @@ router.post('/material', multerGlobal, isAuth, createMaterial);
 router.put('/material/:id', multerGlobal, isAuth, updateMaterial);
 router.delete('/material/:id', multerGlobal, isAuth, deleteMaterial);
 
+router.post('/lecture', multerGlobal, isAuth, createLecture);
+router.get(
+  '/lectures/:materialId',
+  multerGlobal,
+  isAuth,
+  getLecturesByMaterial
+);
+router.put('/lecture/:id', multerGlobal, isAuth, updateLecture);
+router.delete('/lecture/:id', multerGlobal, isAuth, deleteLecture);
+
 router.post('/unit', multerGlobal, isAuth, createUnit);
+router.put('/unit/:id', multerGlobal, isAuth, updateUnit);
 router.delete('/unit/:id', multerGlobal, isAuth, deleteUnit);
 
 router.post('/lesson', multerGlobal, isAuth, createLesson);
+router.put('/lesson/:id', multerGlobal, isAuth, updateLesson);
 router.delete('/lesson/:id', multerGlobal, isAuth, deleteLesson);
 
 router.post('/questions', multerGlobal, isAuth, createQuestionGroup);
@@ -128,6 +153,15 @@ router.post('/course', multerGlobal, isAuth, createCourse);
 router.get('/courses', multerGlobal, isAuth, getCourses);
 router.put('/course/:id', multerGlobal, isAuth, updateCourse);
 router.delete('/course/:id', multerGlobal, isAuth, deleteCourse);
+
+router.post('/courseFile', multerGlobal, isAuth, createCourseFile);
+router.get(
+  '/courseFiles/:courseId',
+  multerGlobal,
+  isAuth,
+  getCourseFilesByCourse
+);
+router.delete('/courseFile/:id', multerGlobal, isAuth, deleteCourseFile);
 
 router.post('/video', multerGlobal, isAuth, createVideo);
 router.get('/videos', multerGlobal, isAuth, getVideos);

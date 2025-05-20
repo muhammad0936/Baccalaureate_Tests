@@ -24,27 +24,34 @@ exports.redeemCode = [
       const { code } = req.body;
       const studentId = req.userId;
 
-      // 1. Find the code in CodesGroups
+      // 1. Find the code in CodesGroups with material relationships
       const codesGroup = await CodesGroup.findOne(
-        { 'codes.value': code }, // Search condition
-        { 'codes.$': 1, expiration: 1, materials: 1, courses: 1 } // Projection
+        { 'codes.value': code },
+        {
+          'codes.$': 1,
+          expiration: 1,
+          materialsWithQuestions: 1,
+          materialsWithLectures: 1,
+          courses: 1,
+        }
       )
-        .populate({
-          path: 'materials',
-        })
-        .populate({
-          path: 'courses',
-          populate: [
-            {
+        .populate([
+          {
+            path: 'materialsWithQuestions',
+            select: 'name color icon',
+          },
+          {
+            path: 'materialsWithLectures',
+            select: 'name color icon',
+          },
+          {
+            path: 'courses',
+            populate: {
               path: 'material',
-              select: '_id', // Select only _id for material
+              select: 'name color icon',
             },
-            {
-              path: 'teacher',
-              select: 'fname lname', // Select fname and lname for teacher
-            },
-          ],
-        })
+          },
+        ])
         .session(session);
 
       if (!codesGroup) {
@@ -65,10 +72,11 @@ exports.redeemCode = [
           .json({ error: 'مجموعة الأكواد منتهية الصلاحية.' });
       }
 
-      // 3. Check student hasn't redeemed from this group
+      // 3. Check existing redemption
       const student = await Student.findById(studentId)
         .session(session)
         .select('redeemedCodes');
+
       if (!student) return res.status(401).json({ message: 'غير مصرح!' });
 
       const existingRedemption = student.redeemedCodes?.some((redemption) =>
@@ -81,7 +89,7 @@ exports.redeemCode = [
         });
       }
 
-      // 4. Update code status and student record
+      // 4. Update records
       await CodesGroup.updateOne(
         { _id: codesGroup._id, 'codes.value': code },
         { $set: { 'codes.$.isUsed': true } }
@@ -105,7 +113,8 @@ exports.redeemCode = [
         message: 'تم استرداد الكود بنجاح.',
         data: {
           code,
-          materials: codesGroup.materials,
+          materialsWithQuestions: codesGroup.materialsWithQuestions,
+          materialsWithLectures: codesGroup.materialsWithLectures,
           courses: codesGroup.courses,
           expiration: codesGroup.expiration,
         },
@@ -120,43 +129,51 @@ exports.redeemCode = [
 
 exports.getCodesInfo = async (req, res) => {
   try {
-    // Extract the user ID from the request object
     const userId = req.userId;
 
-    // Find the student document by ID and populate necessary fields
     const student = await Student.findById(userId).populate({
       path: 'redeemedCodes.codesGroup',
-      select: 'expiration',
+      select: 'expiration materialsWithQuestions materialsWithLectures courses',
       populate: [
         {
-          path: 'materials',
-          select: 'name',
+          path: 'materialsWithQuestions',
+          select: 'name color icon',
+        },
+        {
+          path: 'materialsWithLectures',
+          select: 'name color icon',
         },
         {
           path: 'courses',
-          select: 'name',
           populate: {
             path: 'material',
-            select: '_id',
+            select: 'name color icon',
           },
         },
       ],
     });
 
-    // Check if the student exists
     if (!student) {
-      return res.status(404).json({
-        message: 'لم يتم العثور على الطالب', // "Student not found"
-      });
+      return res.status(404).json({ message: 'لم يتم العثور على الطالب' });
     }
 
-    // Retrieve and return the redeemed codes
-    const { redeemedCodes } = student;
-    return res.status(200).json(redeemedCodes);
+    const enhancedCodes = student.redeemedCodes.map((redemption) => ({
+      ...redemption.toObject(),
+      codesGroup: {
+        ...redemption.codesGroup.toObject(),
+        materialsWithQuestions: redemption.codesGroup.materialsWithQuestions,
+        materialsWithLectures: redemption.codesGroup.materialsWithLectures,
+        courses: redemption.codesGroup.courses.map((course) => ({
+          ...course.toObject(),
+          material: course.material,
+        })),
+      },
+    }));
+
+    return res.status(200).json(enhancedCodes);
   } catch (error) {
-    // Handle unexpected server errors
-    return res.status(error.statusCode || 500).json({
-      error: error.message || 'حدث خطأ في الخادم.', // "An error occurred on the server"
+    return res.status(500).json({
+      error: error.message || 'حدث خطأ في الخادم.',
     });
   }
 };
