@@ -11,7 +11,6 @@ const {
 } = require('../controllers/Student/Auth');
 const { redeemCode, getCodesInfo } = require('../controllers/Student/Code');
 const {
-  getFreeQuestions,
   getFreeQuestionsjByLesson,
   getFreeQuestionsByMaterial,
 } = require('../controllers/Student/FreeQuestion');
@@ -39,6 +38,7 @@ const { getMaterials } = require('../controllers/Admin/Material');
 const { getUnits } = require('../controllers/Admin/Unit');
 const { getLessons } = require('../controllers/Admin/Lesson');
 const { getUserNotifications } = require('../controllers/Student/Notification');
+const { getLectures } = require('../controllers/Student/Lecture');
 router.post('/otp', sendOtp);
 router.post('/signup', signup);
 router.post('/login', login);
@@ -54,6 +54,7 @@ router.get('/freeCourses', isAuth, getFreeCourses),
 
 router.get('/materials', isAuth, getMaterials);
 router.get('/accessibleMaterials', isAuth, getAccessibleMaterials);
+router.get('/lectures/:material', isAuth, getLectures);
 router.get('/units', multerGlobal, isAuth, getUnits);
 router.get('/lessons', multerGlobal, isAuth, getLessons);
 router.get('/questions', isAuth, getAccessibleQuestions);

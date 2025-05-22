@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 
 exports.getLectures = async (req, res) => {
   try {
+    console.log('hit');
     const { material } = req.params;
     const studentId = req.userId;
 
@@ -22,7 +23,6 @@ exports.getLectures = async (req, res) => {
     const student = await Student.findById(studentId)
       .select('redeemedCodes')
       .lean();
-
     if (!student) {
       return res.status(404).json({ message: 'الطالب غير موجود.' });
     }
@@ -48,15 +48,17 @@ exports.getLectures = async (req, res) => {
       lectures = lectures.map((lecture, index) => {
         // Always return full details for first lecture
         if (index === 0) return lecture;
-        
+
         // For other lectures, remove accessUrl but keep filename
-        const sanitizedFile = lecture.file ? {
-          filename: lecture.file.filename
-        } : null;
+        const sanitizedFile = lecture.file
+          ? {
+              filename: lecture.file.filename,
+            }
+          : null;
 
         return {
           ...lecture,
-          file: sanitizedFile
+          file: sanitizedFile,
         };
       });
     }

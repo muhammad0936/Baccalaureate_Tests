@@ -9,6 +9,7 @@ module.exports = (req, res, next) => {
     token = token.split(' ')[1];
     let decodedToken;
     decodedToken = jwt.verify(token, 'thisismysecretkey');
+    console.log(decodedToken);
     if (!decodedToken) {
       return res.status(401).json({ message: 'Not authenticated!' });
     }
