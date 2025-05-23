@@ -109,7 +109,7 @@ exports.createCodesGroup = [
           name: codesGroup.name,
           codeCount: codesGroup.codes.length,
           expiration: codesGroup.expiration,
-          codes: codesGroup.codes
+          codes: codesGroup.codes,
         },
       });
     } catch (err) {
@@ -174,27 +174,11 @@ exports.getCodesGroups = [
         populate: [
           {
             path: 'materialsWithQuestions',
-            select: 'name college year',
-            populate: {
-              path: 'college',
-              select: 'name university',
-              populate: {
-                path: 'university',
-                select: 'name',
-              },
-            },
+            select: 'name',
           },
           {
             path: 'materialsWithLectures',
-            select: 'name college year',
-            populate: {
-              path: 'college',
-              select: 'name university',
-              populate: {
-                path: 'university',
-                select: 'name',
-              },
-            },
+            select: 'name',
           },
           {
             path: 'courses',
@@ -202,15 +186,7 @@ exports.getCodesGroups = [
             populate: [
               {
                 path: 'material',
-                select: 'name college',
-                populate: {
-                  path: 'college',
-                  select: 'name university',
-                  populate: {
-                    path: 'university',
-                    select: 'name',
-                  },
-                },
+                select: 'name',
               },
               {
                 path: 'teacher',
@@ -235,23 +211,11 @@ exports.getCodesGroups = [
           (material) => ({
             _id: material._id,
             name: material.name,
-            year: material.year,
-            college: {
-              _id: material.college?._id,
-              name: material.college?.name,
-              university: material.college?.university,
-            },
           })
         ),
         materialsWithLectures: group.materialsWithLectures.map((material) => ({
           _id: material._id,
           name: material.name,
-          year: material.year,
-          college: {
-            _id: material.college?._id,
-            name: material.college?.name,
-            university: material.college?.university,
-          },
         })),
         courses: group.courses.map((course) => ({
           _id: course._id,
