@@ -87,17 +87,17 @@ exports.sendOtp = async (req, res) => {
     }
 
     // Configure the email transporter.
-const transporter = nodemailer.createTransport({
-  host: process.env.HOSTINGER_SMTP_HOST,
-  port: parseInt(process.env.HOSTINGER_SMTP_PORT),
-  secure: true, // Use SSL (port 465)
-  auth: {
-    user: process.env.HOSTINGER_EMAIL,
-    pass: process.env.HOSTINGER_EMAIL_PASSWORD,
-  },
-  pool: true, // Enable connection pooling
-  maxConnections: 5, // Limit concurrent connections
-});
+    const transporter = nodemailer.createTransport({
+      host: process.env.HOSTINGER_SMTP_HOST,
+      port: parseInt(process.env.HOSTINGER_SMTP_PORT),
+      secure: true, // Use SSL (port 465)
+      auth: {
+        user: process.env.HOSTINGER_EMAIL,
+        pass: process.env.HOSTINGER_EMAIL_PASSWORD,
+      },
+      pool: true, // Enable connection pooling
+      maxConnections: 5, // Limit concurrent connections
+    });
 
     // Send the OTP via email.
     await transporter.sendMail({
@@ -347,11 +347,11 @@ exports.login = [
           .status(401)
           .json({ message: 'بيانات تسجيل الدخول غير صالحة!' });
       }
-      if (loadedStudent.deviceId !== deviceId) {
-        return res
-          .status(401)
-          .json({ message: 'لا يمكن فتح الحساب من جهاز مختلف' });
-      }
+      // if (loadedStudent.deviceId !== deviceId) {
+      //   return res
+      //     .status(401)
+      //     .json({ message: 'لا يمكن فتح الحساب من جهاز مختلف' });
+      // }
 
       const token = jwt.sign(
         {
