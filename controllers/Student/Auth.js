@@ -167,12 +167,12 @@ const validateSignup = [
     .withMessage('رمز deviceId مطلوب')
     .isString()
     .withMessage('رمز deviceId يجب أن يكون نصاً'),
-  body('otp')
-    .trim()
-    .notEmpty()
-    .withMessage('رمز otp مطلوب')
-    .isString()
-    .withMessage('رمز otp يجب أن يكون نصاً'),
+  // body('otp')
+  //   .trim()
+  //   .notEmpty()
+  //   .withMessage('رمز otp مطلوب')
+  //   .isString()
+  //   .withMessage('رمز otp يجب أن يكون نصاً'),
 
   body('password').trim().notEmpty().withMessage('كلمة المرور مطلوبة.'),
   body('phone')
@@ -236,12 +236,12 @@ exports.signup = [
         }
       }
 
-      // Ensure an OTP code was provided.
-      if (!otp) {
-        return res
-          .status(StatusCodes.BAD_REQUEST)
-          .json({ message: 'الرجاء إدخال الرمز التأكيدي.' });
-      }
+      // // Ensure an OTP code was provided.
+      // if (!otp) {
+      //   return res
+      //     .status(StatusCodes.BAD_REQUEST)
+      //     .json({ message: 'الرجاء إدخال الرمز التأكيدي.' });
+      // }
       if (!deviceId) {
         return res
           .status(StatusCodes.BAD_REQUEST)
@@ -249,28 +249,28 @@ exports.signup = [
       }
 
       // Retrieve the OTP record sent to the specified email.
-      const otpRecord = await Otp.findOne({ email });
-      // console.log('Retrieved OTP record:', otpRecord);
-      if (!otpRecord) {
-        return res.status(StatusCodes.BAD_REQUEST).json({
-          message: 'لم يتم إرسال رمز تأكيد لهذا البريد الالكتروني.',
-        });
-      }
+      // const otpRecord = await Otp.findOne({ email });
+      // // console.log('Retrieved OTP record:', otpRecord);
+      // if (!otpRecord) {
+      //   return res.status(StatusCodes.BAD_REQUEST).json({
+      //     message: 'لم يتم إرسال رمز تأكيد لهذا البريد الالكتروني.',
+      //   });
+      // }
 
       // Validate that the provided OTP matches.
-      if (otp !== otpRecord.otp) {
-        return res.status(StatusCodes.BAD_REQUEST).json({
-          message: 'الرمز التأكيدي غير صحيح.',
-        });
-      }
+      // if (otp !== otpRecord.otp) {
+      //   return res.status(StatusCodes.BAD_REQUEST).json({
+      //     message: 'الرمز التأكيدي غير صحيح.',
+      //   });
+      // }
 
       // Validate OTP expiration using `expiresAt` from the new schema.
-      const now = new Date();
-      if (now > otpRecord.expiresAt) {
-        return res
-          .status(StatusCodes.BAD_REQUEST)
-          .json({ message: 'انتهت صلاحية الرمز التأكيدي.' });
-      }
+      // const now = new Date();
+      // if (now > otpRecord.expiresAt) {
+      //   return res
+      //     .status(StatusCodes.BAD_REQUEST)
+      //     .json({ message: 'انتهت صلاحية الرمز التأكيدي.' });
+      // }
 
       // Check if the email is already associated with a student account.
       const existingStudent = await Student.findOne({ email });
@@ -294,7 +294,7 @@ exports.signup = [
         image: image || { filename: '', accessUrl: '' },
       });
       await student.save();
-      await Otp.deleteOne({ email });
+      // await Otp.deleteOne({ email });
       // Generate a JWT token.
       const token = jwt.sign(
         {
