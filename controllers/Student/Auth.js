@@ -302,8 +302,7 @@ exports.signup = [
           email: student.email,
           role: 'student',
         },
-        'thisismysecretkey',
-        { expiresIn: '30d' }
+        'thisismysecretkey'
       );
 
       return res.status(StatusCodes.CREATED).json({
@@ -359,8 +358,7 @@ exports.login = [
           email: loadedStudent.email,
           role: 'student',
         },
-        'thisismysecretkey',
-        { expiresIn: '30d' }
+        'thisismysecretkey'
       );
 
       res.status(StatusCodes.OK).json({

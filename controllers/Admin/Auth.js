@@ -81,8 +81,7 @@ exports.login = [
           phone: loadedAdmin.phone,
           userId: loadedAdmin._id,
         },
-        'thisismysecretkey',
-        { expiresIn: '30d' }
+        'thisismysecretkey'
       );
       res.status(200).json({
         message: 'تم تسجيل الدخول بنجاح',
