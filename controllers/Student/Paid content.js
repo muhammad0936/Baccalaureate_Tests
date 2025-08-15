@@ -7,6 +7,7 @@ const Course = require('../../models/Course');
 const Video = require('../../models/Video');
 const QuestionGroup = require('../../models/QuestionGroup');
 const Lesson = require('../../models/Lesson');
+const CourseFile = require('../../models/CourseFile');
 
 exports.getAccessibleMaterials = async (req, res) => {
   try {
@@ -366,5 +367,73 @@ exports.getQuestionGroupWithQuestion = async (req, res) => {
   } catch (err) {
     console.error('Error in getQuestionGroupWithQuestion:', err);
     res.status(500).json({ error: err.message || 'حدث خطأ في الخادم.' });
+  }
+};
+
+exports.getCourseFiles = async (req, res) => {
+  try {
+    const { course } = req.params;
+    const studentId = req.userId;
+
+    // Validate course ID
+    if (!course || !mongoose.Types.ObjectId.isValid(course)) {
+      return res.status(400).json({ message: 'معرف الدورة غير صالح.' });
+    }
+
+    const courseId = new mongoose.Types.ObjectId(course);
+
+    // Get student with redeemed codes
+    const student = await Student.findById(studentId)
+      .select('redeemedCodes')
+      .lean();
+
+    if (!student) {
+      return res.status(404).json({ message: 'لم يتم العثور على الطالب.' });
+    }
+
+    // Check course access
+    let hasAccess = false;
+    const now = new Date();
+
+    if (student.redeemedCodes.length > 0) {
+      const accessCheck = await CodesGroup.findOne({
+        courses: courseId,
+        expiration: { $gt: now },
+        _id: { $in: student.redeemedCodes.map((rc) => rc.codesGroup) },
+        codes: {
+          $elemMatch: {
+            value: { $in: student.redeemedCodes.map((rc) => rc.code) },
+            isUsed: true,
+          },
+        },
+      });
+
+      hasAccess = !!accessCheck;
+    }
+
+    // Get course files sorted by num
+    const courseFiles = await CourseFile.find({ course: courseId })
+      .sort({ num: 1 })
+      .lean();
+
+    // Format response based on access
+    const formattedFiles = courseFiles.map((file) => ({
+      _id: file._id,
+      num: file.num,
+      course: file.course,
+      file: {
+        filename: file.file.filename,
+        ...(hasAccess && { accessUrl: file.file.accessUrl }),
+      },
+      createdAt: file.createdAt,
+    }));
+
+    res.status(200).json({
+      hasAccess,
+      files: formattedFiles,
+    });
+  } catch (err) {
+    console.error('Error in getCourseFiles:', err);
+    res.status(500).json({ error: 'حدث خطأ في الخادم.' });
   }
 };
